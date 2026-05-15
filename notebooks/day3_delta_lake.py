@@ -1,241 +1,362 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Day 3: Delta Lake Deep Dive
-# MAGIC **Import this file into Databricks Community Edition:**
-# MAGIC 1. Workspace → Import → File → upload `day3_delta_lake.py`
-# MAGIC 2. Attach to cluster (Runtime 13.x LTS or higher)
+# MAGIC # Day 3 — Delta Lake Deep Dive on Azure Databricks
+# MAGIC
+# MAGIC **Environment:** Azure Databricks (Unity Catalog enabled)  
+# MAGIC **Cluster:** Single Node, DBR 15.x LTS, `Standard_DS3_v2`  
+# MAGIC **Estimated time:** 3–4 hours
+# MAGIC
+# MAGIC ## What you will practice:
+# MAGIC - Creating Delta tables as Unity Catalog managed tables
+# MAGIC - CRUD operations: INSERT, UPDATE, DELETE, MERGE
+# MAGIC - Time travel: VERSION AS OF, TIMESTAMP AS OF, RESTORE
+# MAGIC - OPTIMIZE, ZORDER, Liquid Clustering
+# MAGIC - Schema evolution and enforcement
+# MAGIC - Change Data Feed (CDF)
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 1. Creating Delta Tables
+# MAGIC %md ## Setup — Create Catalog & Schema
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Create a Delta table using SQL
-# MAGIC DROP TABLE IF EXISTS default.sales;
+# MAGIC CREATE CATALOG IF NOT EXISTS training
+# MAGIC   COMMENT 'Practice catalog for DE Associate exam prep';
 # MAGIC
-# MAGIC CREATE TABLE default.sales (
-# MAGIC   sale_id    BIGINT,
-# MAGIC   product    STRING,
-# MAGIC   category   STRING,
-# MAGIC   amount     DOUBLE,
-# MAGIC   sale_date  DATE,
-# MAGIC   region     STRING
+# MAGIC CREATE SCHEMA IF NOT EXISTS training.day3
+# MAGIC   COMMENT 'Day 3: Delta Lake deep dive exercises';
+# MAGIC
+# MAGIC USE CATALOG training;
+# MAGIC USE SCHEMA day3;
+# MAGIC SELECT current_catalog(), current_schema();
+
+# COMMAND ----------
+# MAGIC %md ## Task 1 — Create a Delta Table and Explore the Transaction Log
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- Create a managed Delta table (Unity Catalog manages storage — no LOCATION needed)
+# MAGIC CREATE OR REPLACE TABLE training.day3.sales (
+# MAGIC   sale_id   BIGINT,
+# MAGIC   product   STRING,
+# MAGIC   region    STRING,
+# MAGIC   amount    DOUBLE,
+# MAGIC   sale_date DATE
+# MAGIC ) USING DELTA
+# MAGIC COMMENT 'Sales fact table for Delta Lake exercises';
+# MAGIC
+# MAGIC -- Insert first batch (version 1)
+# MAGIC INSERT INTO training.day3.sales VALUES
+# MAGIC   (1, 'Widget A', 'EU',   99.99,  '2024-01-10'),
+# MAGIC   (2, 'Widget B', 'US',   149.50, '2024-01-11'),
+# MAGIC   (3, 'Gadget X', 'EU',   299.00, '2024-01-12');
+# MAGIC
+# MAGIC -- View the transaction log history
+# MAGIC DESCRIBE HISTORY training.day3.sales;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- Inspect table details (location, format, partitions, file count)
+# MAGIC DESCRIBE DETAIL training.day3.sales;
+# MAGIC -- Note: 'location' shows the Unity Catalog-managed ADLS Gen2 path automatically
+
+# COMMAND ----------
+# MAGIC %md ## Task 2 — CRUD Operations + MERGE
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- UPDATE: apply a price increase for EU region
+# MAGIC UPDATE training.day3.sales
+# MAGIC SET amount = ROUND(amount * 1.20, 2)
+# MAGIC WHERE region = 'EU';
+# MAGIC
+# MAGIC SELECT * FROM training.day3.sales;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- DELETE
+# MAGIC DELETE FROM training.day3.sales
+# MAGIC WHERE product = 'Gadget X';
+# MAGIC
+# MAGIC SELECT * FROM training.day3.sales;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- Create a source table for MERGE (also a managed UC table)
+# MAGIC CREATE OR REPLACE TABLE training.day3.sales_updates (
+# MAGIC   sale_id   BIGINT,
+# MAGIC   product   STRING,
+# MAGIC   region    STRING,
+# MAGIC   amount    DOUBLE,
+# MAGIC   sale_date DATE
 # MAGIC ) USING DELTA;
 # MAGIC
-# MAGIC -- Insert sample data
-# MAGIC INSERT INTO default.sales VALUES
-# MAGIC   (1, 'Laptop',   'Electronics', 1200.00, '2024-01-01', 'North'),
-# MAGIC   (2, 'Mouse',    'Electronics',   25.00, '2024-01-02', 'South'),
-# MAGIC   (3, 'Desk',     'Furniture',    450.00, '2024-01-03', 'East'),
-# MAGIC   (4, 'Chair',    'Furniture',    250.00, '2024-01-04', 'West'),
-# MAGIC   (5, 'Monitor',  'Electronics',  400.00, '2024-01-05', 'North'),
-# MAGIC   (6, 'Keyboard', 'Electronics',   75.00, '2024-01-06', 'South'),
-# MAGIC   (7, 'Lamp',     'Furniture',     80.00, '2024-01-07', 'East'),
-# MAGIC   (8, 'Tablet',   'Electronics',  350.00, '2024-01-08', 'West');
+# MAGIC INSERT INTO training.day3.sales_updates VALUES
+# MAGIC   (2, 'Widget B', 'US',  199.99, '2024-02-01'),  -- update existing
+# MAGIC   (4, 'Gadget Y', 'APAC', 450.00, '2024-02-02'); -- new row
 # MAGIC
-# MAGIC SELECT * FROM default.sales;
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 2. ACID Transactions — MERGE (Upsert)
-
-# COMMAND ----------
-from pyspark.sql import functions as F, Row
-
-# Create an "updates" DataFrame with new and changed records
-updates = spark.createDataFrame([
-    Row(sale_id=3, product='Standing Desk', category='Furniture', amount=899.00, sale_date='2024-01-03', region='East'),  # UPDATE
-    Row(sale_id=9, product='Webcam', category='Electronics', amount=130.00, sale_date='2024-01-09', region='North'),     # INSERT
-    Row(sale_id=10, product='Headphones', category='Electronics', amount=200.00, sale_date='2024-01-10', region='South'), # INSERT
-]).withColumn("sale_date", F.col("sale_date").cast("date"))
-
-updates.createOrReplaceTempView("sales_updates")
-
-# COMMAND ----------
-# MAGIC %sql
-# MAGIC -- MERGE: upsert pattern
-# MAGIC MERGE INTO default.sales AS target
-# MAGIC USING sales_updates AS source
-# MAGIC ON target.sale_id = source.sale_id
+# MAGIC -- MERGE: upsert from updates into target
+# MAGIC MERGE INTO training.day3.sales AS t
+# MAGIC USING training.day3.sales_updates AS s
+# MAGIC ON t.sale_id = s.sale_id
 # MAGIC WHEN MATCHED THEN
-# MAGIC   UPDATE SET
-# MAGIC     target.product   = source.product,
-# MAGIC     target.amount    = source.amount
+# MAGIC   UPDATE SET t.amount = s.amount, t.sale_date = s.sale_date
 # MAGIC WHEN NOT MATCHED THEN
-# MAGIC   INSERT (sale_id, product, category, amount, sale_date, region)
-# MAGIC   VALUES (source.sale_id, source.product, source.category, source.amount, source.sale_date, source.region);
+# MAGIC   INSERT (sale_id, product, region, amount, sale_date)
+# MAGIC   VALUES (s.sale_id, s.product, s.region, s.amount, s.sale_date);
 # MAGIC
-# MAGIC SELECT * FROM default.sales ORDER BY sale_id;
+# MAGIC SELECT * FROM training.day3.sales ORDER BY sale_id;
+# MAGIC -- Expected: sale_id=2 has 199.99; sale_id=4 is added; sale_id=3 is gone
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 3. Time Travel
-
-# COMMAND ----------
-# MAGIC %sql
-# MAGIC -- View history of all transactions
-# MAGIC DESCRIBE HISTORY default.sales;
+# MAGIC %md ## Task 3 — Time Travel
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Read an older version (version 0 = initial insert)
-# MAGIC SELECT * FROM default.sales VERSION AS OF 0
-# MAGIC ORDER BY sale_id;
+# MAGIC -- Show full version history
+# MAGIC DESCRIBE HISTORY training.day3.sales;
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Read by timestamp (replace with an actual timestamp from DESCRIBE HISTORY above)
-# MAGIC -- SELECT * FROM default.sales TIMESTAMP AS OF '2024-01-01 00:00:00';
+# MAGIC -- Query version 1 (the initial INSERT)
+# MAGIC SELECT * FROM training.day3.sales VERSION AS OF 1;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- Query by timestamp (replace with a value from DESCRIBE HISTORY above)
+# MAGIC -- SELECT * FROM training.day3.sales TIMESTAMP AS OF '2024-01-11 00:00:00';
 # MAGIC
-# MAGIC -- Restore to a previous version
-# MAGIC -- RESTORE TABLE default.sales TO VERSION AS OF 0;
-# MAGIC
-# MAGIC -- How many versions exist?
-# MAGIC SELECT COUNT(*) AS num_versions FROM (DESCRIBE HISTORY default.sales);
+# MAGIC -- Python equivalent:
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 4. Schema Evolution & Enforcement
+# Python time travel
+df_v1 = spark.read.format("delta").option("versionAsOf", 1).table("training.day3.sales")
+print("Version 1 data:")
+df_v1.show()
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Schema enforcement: this WILL FAIL because 'discount' column doesn't exist
-# MAGIC -- INSERT INTO default.sales VALUES (99, 'Projector', 'Electronics', 600.00, '2024-02-01', 'North', 0.10);
+# MAGIC -- RESTORE to version 1 (undo all changes)
+# MAGIC RESTORE TABLE training.day3.sales TO VERSION AS OF 1;
+# MAGIC SELECT * FROM training.day3.sales;
+# MAGIC -- Expected: original 3 rows
 
 # COMMAND ----------
-# Schema evolution: add a column with mergeSchema
-new_data = spark.createDataFrame([
-    Row(sale_id=11, product='Projector', category='Electronics', amount=600.00, sale_date='2024-02-01', region='North', discount=0.10),
-]).withColumn("sale_date", F.col("sale_date").cast("date"))
+# MAGIC %md ## Task 4 — OPTIMIZE, ZORDER, and Liquid Clustering
 
+# COMMAND ----------
+# Generate a larger dataset to demonstrate OPTIMIZE benefits
+from pyspark.sql import Row
+from datetime import date, timedelta
+import random
+
+random.seed(42)
+regions  = ["EU", "US", "APAC", "LATAM"]
+products = ["Widget A", "Widget B", "Gadget X", "Gadget Y", "Device Z"]
+
+big_data = [
+    Row(
+        sale_id=i,
+        product=random.choice(products),
+        region=random.choice(regions),
+        amount=round(random.uniform(10, 500), 2),
+        sale_date=(date(2024, 1, 1) + timedelta(days=i % 365)),
+    )
+    for i in range(1, 10001)
+]
+
+big_df = spark.createDataFrame(big_data)
+big_df.write.mode("overwrite").saveAsTable("training.day3.sales_large")
+print(f"Created training.day3.sales_large with {big_df.count()} rows")
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- Check file count BEFORE optimize
+# MAGIC DESCRIBE DETAIL training.day3.sales_large;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- OPTIMIZE: compact small files into larger ones
+# MAGIC OPTIMIZE training.day3.sales_large;
+# MAGIC
+# MAGIC -- Check file count AFTER optimize
+# MAGIC DESCRIBE DETAIL training.day3.sales_large;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- ZORDER BY: co-locate data to speed up filters on these columns
+# MAGIC OPTIMIZE training.day3.sales_large ZORDER BY (region, sale_date);
+# MAGIC
+# MAGIC -- Now queries filtering on region or sale_date will skip more files
+# MAGIC SELECT COUNT(*) FROM training.day3.sales_large WHERE region = 'EU' AND sale_date >= '2024-06-01';
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- Liquid Clustering (modern alternative to ZORDER for new tables)
+# MAGIC -- Define on table creation:
+# MAGIC CREATE OR REPLACE TABLE training.day3.sales_clustered
+# MAGIC   CLUSTER BY (region, sale_date)
+# MAGIC   COMMENT 'Sales table using Liquid Clustering (no ZORDER needed)'
+# MAGIC AS SELECT * FROM training.day3.sales_large;
+# MAGIC
+# MAGIC -- Incrementally cluster new data:
+# MAGIC OPTIMIZE training.day3.sales_clustered;
+# MAGIC
+# MAGIC DESCRIBE DETAIL training.day3.sales_clustered;
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC -- VACUUM: remove files older than retention threshold
+# MAGIC -- Default retention = 7 days (168 hours)
+# MAGIC -- ⚠️ NEVER use RETAIN 0 HOURS in production — it breaks time travel!
+# MAGIC VACUUM training.day3.sales_large RETAIN 168 HOURS;
+
+# COMMAND ----------
+# MAGIC %md ## Task 5 — Schema Evolution and Enforcement
+
+# COMMAND ----------
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE TABLE training.day3.schema_demo (
+# MAGIC   id INT,
+# MAGIC   name STRING
+# MAGIC ) USING DELTA;
+# MAGIC
+# MAGIC INSERT INTO training.day3.schema_demo VALUES (1, 'Alice'), (2, 'Bob');
+# MAGIC SELECT * FROM training.day3.schema_demo;
+
+# COMMAND ----------
+# Schema enforcement: adding an extra column FAILS by default
+try:
+    new_data = spark.createDataFrame([(3, "Charlie", "Engineering")], ["id", "name", "department"])
+    new_data.write.mode("append").saveAsTable("training.day3.schema_demo")
+except Exception as e:
+    print(f"Schema enforcement worked — write rejected:\n{e}")
+
+# COMMAND ----------
+# Schema evolution: mergeSchema allows adding new columns
+new_data = spark.createDataFrame([(3, "Charlie", "Engineering")], ["id", "name", "department"])
 new_data.write \
-    .format("delta") \
     .mode("append") \
     .option("mergeSchema", "true") \
-    .saveAsTable("default.sales")
+    .saveAsTable("training.day3.schema_demo")
 
-display(spark.sql("SELECT * FROM default.sales WHERE sale_id = 11"))
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 5. Change Data Feed (CDF)
+print("After schema evolution (mergeSchema=true):")
+spark.table("training.day3.schema_demo").show()
+# Note: existing rows have NULL for the new 'department' column
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Enable CDF on the table
-# MAGIC ALTER TABLE default.sales SET TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
-# MAGIC
-# MAGIC -- Make a change
-# MAGIC UPDATE default.sales SET amount = 1350.00 WHERE sale_id = 1;
-# MAGIC DELETE FROM default.sales WHERE sale_id = 7;
-# MAGIC
-# MAGIC -- Read the change feed — shows _change_type: insert, update_preimage, update_postimage, delete
-# MAGIC SELECT * FROM table_changes('default.sales', 3) ORDER BY _commit_version, _change_type;
+# MAGIC -- Alternatively use ALTER TABLE to add a column
+# MAGIC ALTER TABLE training.day3.schema_demo ADD COLUMN email STRING;
+# MAGIC DESCRIBE training.day3.schema_demo;
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 6. OPTIMIZE and ZORDER
+# MAGIC %md ## Task 6 — Change Data Feed (CDF)
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Compact small files into larger ones
-# MAGIC OPTIMIZE default.sales;
+# MAGIC -- Enable CDF on a Delta table
+# MAGIC CREATE OR REPLACE TABLE training.day3.cdf_demo (
+# MAGIC   id     INT,
+# MAGIC   name   STRING,
+# MAGIC   salary DOUBLE
+# MAGIC ) USING DELTA
+# MAGIC TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
 # MAGIC
-# MAGIC -- ZORDER: co-locate related data for fast range queries
-# MAGIC OPTIMIZE default.sales ZORDER BY (category, region);
+# MAGIC INSERT INTO training.day3.cdf_demo VALUES (1, 'Alice', 80000), (2, 'Bob', 70000);
+# MAGIC UPDATE training.day3.cdf_demo SET salary = 90000 WHERE id = 1;
+# MAGIC DELETE FROM training.day3.cdf_demo WHERE id = 2;
 # MAGIC
-# MAGIC -- Clean up old files (after OPTIMIZE, old versions are kept for time travel)
-# MAGIC -- VACUUM default.sales RETAIN 168 HOURS;  -- keep 7 days
-# MAGIC -- VACUUM default.sales DRY RUN;             -- preview what would be deleted
+# MAGIC -- View the change feed (includes _change_type column)
+# MAGIC SELECT * FROM table_changes('training.day3.cdf_demo', 1)
+# MAGIC ORDER BY _commit_version, _change_type;
+# MAGIC -- _change_type: insert | update_preimage | update_postimage | delete
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 7. Delta Table Properties & Metadata
+# Read CDF as a stream (used in medallion pipeline: bronze→silver propagation)
+cdf_stream = (
+    spark.readStream
+    .format("delta")
+    .option("readChangeFeed", "true")
+    .option("startingVersion", 1)
+    .table("training.day3.cdf_demo")
+)
+
+print("CDF schema (includes _change_type, _commit_version, _commit_timestamp):")
+cdf_stream.printSchema()
+
+# COMMAND ----------
+# MAGIC %md ## Task 7 — Medallion Architecture Demo
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Detailed table info
-# MAGIC DESCRIBE DETAIL default.sales;
+# MAGIC -- Bronze: raw ingest
+# MAGIC CREATE OR REPLACE TABLE training.day3.bronze_orders (
+# MAGIC   raw_order_id STRING,
+# MAGIC   raw_date     STRING,
+# MAGIC   customer_id  STRING,
+# MAGIC   raw_amount   STRING,   -- string because raw data is unvalidated
+# MAGIC   status       STRING
+# MAGIC ) USING DELTA
+# MAGIC COMMENT 'Bronze: raw orders as-landed, no transformations';
+# MAGIC
+# MAGIC INSERT INTO training.day3.bronze_orders VALUES
+# MAGIC   ('ORD001', '2024-01-15', 'C001', '150.00',  'completed'),
+# MAGIC   ('ORD002', '2024-01-16', 'C002', '-50.00',  'completed'),  -- bad: negative
+# MAGIC   ('ORD003', '2024-01-17', 'C003', '75.00',   'pending'),
+# MAGIC   ('ORD004', '2024-01-18', 'C004', 'NULL',    'completed'),  -- bad: null
+# MAGIC   ('ORD005', '2024-01-19', 'C005', '310.00',  'cancelled');
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Table properties
-# MAGIC SHOW TBLPROPERTIES default.sales;
+# MAGIC -- Silver: cleaned, typed, filtered
+# MAGIC CREATE OR REPLACE TABLE training.day3.silver_orders
+# MAGIC USING DELTA
+# MAGIC COMMENT 'Silver: validated and typed orders'
+# MAGIC AS
+# MAGIC SELECT
+# MAGIC   raw_order_id                      AS order_id,
+# MAGIC   CAST(raw_date   AS DATE)          AS order_date,
+# MAGIC   customer_id,
+# MAGIC   CAST(raw_amount AS DOUBLE)        AS amount,
+# MAGIC   status,
+# MAGIC   current_timestamp()               AS processed_at
+# MAGIC FROM training.day3.bronze_orders
+# MAGIC WHERE raw_amount NOT IN ('NULL', '')
+# MAGIC   AND CAST(raw_amount AS DOUBLE) > 0;
+# MAGIC
+# MAGIC SELECT * FROM training.day3.silver_orders;
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC -- Partition info (not partitioned in this example, but common exam topic)
-# MAGIC -- CREATE TABLE default.sales_partitioned
-# MAGIC -- USING DELTA
-# MAGIC -- PARTITIONED BY (region)
-# MAGIC -- AS SELECT * FROM default.sales;
+# MAGIC -- Gold: aggregated business metric
+# MAGIC CREATE OR REPLACE TABLE training.day3.gold_daily_revenue
+# MAGIC USING DELTA
+# MAGIC COMMENT 'Gold: daily revenue aggregation for BI'
+# MAGIC AS
+# MAGIC SELECT
+# MAGIC   order_date,
+# MAGIC   COUNT(*)       AS order_count,
+# MAGIC   SUM(amount)    AS total_revenue,
+# MAGIC   AVG(amount)    AS avg_order_value
+# MAGIC FROM training.day3.silver_orders
+# MAGIC GROUP BY order_date
+# MAGIC ORDER BY order_date;
 # MAGIC
-# MAGIC -- DESCRIBE EXTENDED default.sales_partitioned;
+# MAGIC SELECT * FROM training.day3.gold_daily_revenue;
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 8. Medallion Architecture Demo
-
-# COMMAND ----------
-# Bronze: raw ingestion (no transformations)
-bronze_df = spark.read \
-    .option("header", "true") \
-    .option("inferSchema", "true") \
-    .csv("/databricks-datasets/samples/population-vs-price/data_geo.csv") \
-    .withColumn("_ingest_timestamp", F.current_timestamp()) \
-    .withColumn("_source_file", F.input_file_name())
-
-bronze_df.write \
-    .mode("overwrite") \
-    .format("delta") \
-    .save("/tmp/medallion/bronze/population")
-
-print(f"Bronze rows: {bronze_df.count()}")
-display(bronze_df.limit(3))
-
-# COMMAND ----------
-# Silver: cleaned, deduplicated, validated
-silver_df = spark.read.format("delta").load("/tmp/medallion/bronze/population") \
-    .dropDuplicates() \
-    .dropna(subset=["City", "2014 rank"]) \
-    .withColumnRenamed("2014 rank", "rank_2014") \
-    .withColumnRenamed("City", "city") \
-    .withColumnRenamed("State", "state") \
-    .select("city", "state", "rank_2014")
-
-silver_df.write \
-    .mode("overwrite") \
-    .format("delta") \
-    .save("/tmp/medallion/silver/population")
-
-print(f"Silver rows: {silver_df.count()}")
-display(silver_df.limit(5))
-
-# COMMAND ----------
-# Gold: aggregated, business-ready
-gold_df = spark.read.format("delta").load("/tmp/medallion/silver/population") \
-    .groupBy("state") \
-    .agg(
-        F.count("city").alias("city_count"),
-        F.min("rank_2014").alias("highest_ranked_city_rank")
-    ) \
-    .orderBy(F.col("city_count").desc())
-
-gold_df.write \
-    .mode("overwrite") \
-    .format("delta") \
-    .save("/tmp/medallion/gold/population_by_state")
-
-print("Gold layer:")
-display(gold_df)
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## ✅ Day 3 Practice Challenges
+# MAGIC ## ✅ Day 3 Notebook Complete
 # MAGIC
-# MAGIC 1. Create a Delta table, insert data, then UPDATE some rows and use `DESCRIBE HISTORY` to verify versions
-# MAGIC 2. Perform a MERGE (upsert) combining new records + updates into your table
-# MAGIC 3. Read version 0 of your table using time travel syntax
-# MAGIC 4. Enable CDF on your table, make changes, then read the change feed
-# MAGIC 5. Build a 3-layer medallion pipeline using any `/databricks-datasets/` dataset
+# MAGIC **What you practiced:**
+# MAGIC - Delta CRUD: INSERT, UPDATE, DELETE, MERGE
+# MAGIC - Time travel: VERSION AS OF, TIMESTAMP AS OF, RESTORE
+# MAGIC - OPTIMIZE, ZORDER, Liquid Clustering, VACUUM
+# MAGIC - Schema enforcement and mergeSchema evolution
+# MAGIC - Change Data Feed (CDF) for incremental propagation
+# MAGIC - Full Bronze → Silver → Gold medallion pipeline
+# MAGIC
+# MAGIC **Azure-specific patterns:**
+# MAGIC - All tables stored as Unity Catalog managed tables (`training.day3.*`)
+# MAGIC - No LOCATION clause needed — Unity Catalog auto-manages ADLS Gen2 storage
+# MAGIC - `table_changes()` for CDF works natively with UC tables
