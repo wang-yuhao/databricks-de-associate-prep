@@ -1,120 +1,122 @@
-# 📚 Learning Resources — Databricks DE Associate
+# Resources — Databricks DE Associate Exam Prep
+### ☁️ Azure Databricks Edition
 
-## ☁️ Azure Databricks Resources
+---
+
+## ☁️ Azure Databricks — Official Docs
 
 | Resource | Link |
-|---|---|
-| Azure Databricks Docs | [learn.microsoft.com/azure/databricks](https://learn.microsoft.com/en-us/azure/databricks/) |
-| ADLS Gen2 Integration | [Azure Storage docs](https://docs.databricks.com/en/connect/storage/azure-storage.html) |
-| Unity Catalog on Azure | [UC Azure setup](https://docs.databricks.com/en/data-governance/unity-catalog/azure.html) |
-| Azure Key Vault Secrets | [Secret scopes](https://docs.databricks.com/en/security/secrets/secret-scopes.html) |
-| Databricks Asset Bundles | [DABs docs](https://docs.databricks.com/en/dev-tools/bundles/index.html) |
-| Delta Live Tables | [DLT on Azure](https://docs.databricks.com/en/delta-live-tables/index.html) |
-| Lakeflow Jobs | [Workflows](https://docs.databricks.com/en/workflows/index.html) |
-| Azure Databricks Pricing | [Pricing page](https://azure.microsoft.com/en-us/pricing/details/databricks/) |
-| Service Principal Auth | [SP setup](https://docs.databricks.com/en/connect/storage/azure-storage.html#service-principal) |
+|----------|------|
+| Azure Databricks Overview | https://learn.microsoft.com/en-us/azure/databricks/ |
+| Quickstart: Create Workspace | https://learn.microsoft.com/en-us/azure/databricks/getting-started/ |
+| ADLS Gen2 Integration | https://docs.databricks.com/en/connect/storage/azure-storage.html |
+| Unity Catalog on Azure | https://docs.databricks.com/en/data-governance/unity-catalog/azure.html |
+| Azure Key Vault Secret Scopes | https://docs.databricks.com/en/security/secrets/secret-scopes.html |
+| Service Principal Auth | https://docs.databricks.com/en/connect/storage/azure-storage.html#service-principal |
+| Databricks Asset Bundles (DABs) | https://docs.databricks.com/en/dev-tools/bundles/index.html |
+| Azure Databricks Pricing | https://azure.microsoft.com/en-us/pricing/details/databricks/ |
+| Cluster Access Modes | https://docs.databricks.com/en/compute/access-mode-limitations.html |
 
 ---
 
-## 🎓 Official Databricks Training (FREE)
+## 🎓 Exam Information
 
-| Course | Link | Duration | Relevant Days |
-|---|---|---|---|
-| Data Engineering with Databricks | [Databricks Academy](https://www.databricks.com/learn/training/data-engineering) | ~8h | All |
-| Apache Spark Programming with Databricks | [Academy](https://www.databricks.com/learn/training/apache-spark-programming) | ~6h | Day 2–3 |
-| Delta Lake Fundamentals | [Academy](https://www.databricks.com/learn/training/delta-lake-fundamentals) | ~3h | Day 3 |
-| Databricks Lakehouse Fundamentals | [Academy](https://www.databricks.com/learn/training/lakehouse-fundamentals) | ~2h | Day 1 |
-
-> 🔑 **Login required:** [Databricks Academy Login](https://www.databricks.com/learn/training/login) — free account
+| Resource | Link |
+|----------|------|
+| Exam Guide — DE Associate | https://www.databricks.com/learn/certification/data-engineer-associate |
+| Official Practice Test | https://www.databricks.com/learn/certification/data-engineer-associate#practice-exam |
+| Exam Registration (Kryterion) | https://www.webassessor.com/databricks |
+| Exam Topics Breakdown | https://www.databricks.com/sites/default/files/2023-04/Databricks-Certified-Data-Engineer-Associate-Exam-Guide.pdf |
 
 ---
 
-## 📖 Documentation Deep Dives
+## 📘 Core Documentation
 
-### Day 1 — Platform
-- [Databricks Architecture Overview](https://docs.databricks.com/en/getting-started/overview.html)
-- [Cluster Types and Configurations](https://docs.databricks.com/en/compute/index.html)
-- [Unity Catalog Overview](https://docs.databricks.com/en/data-governance/unity-catalog/index.html)
-- [External Locations & Volumes](https://docs.databricks.com/en/connect/unity-catalog/volumes.html)
-- [Azure Databricks Workspace Setup](https://learn.microsoft.com/en-us/azure/databricks/getting-started/)
+### Delta Lake
+| Resource | Link |
+|----------|------|
+| Delta Lake Docs | https://docs.delta.io/latest/index.html |
+| Delta Lake on Databricks | https://docs.databricks.com/en/delta/index.html |
+| Delta Time Travel | https://docs.databricks.com/en/delta/history.html |
+| OPTIMIZE & ZORDER | https://docs.databricks.com/en/delta/optimize.html |
+| Liquid Clustering | https://docs.databricks.com/en/delta/clustering.html |
+| Change Data Feed | https://docs.databricks.com/en/delta/delta-change-data-feed.html |
+| Delta MERGE | https://docs.databricks.com/en/delta/merge.html |
 
-### Day 2 — Ingestion & SQL/PySpark
-- [Read and Write Data](https://docs.databricks.com/en/ingestion/index.html)
-- [Auto Loader Documentation](https://docs.databricks.com/en/ingestion/auto-loader/index.html)
-- [DataFrame API (PySpark)](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/index.html)
-- [Databricks SQL](https://docs.databricks.com/en/sql/index.html)
-- [Unity Catalog Volumes](https://docs.databricks.com/en/connect/unity-catalog/volumes.html)
+### Structured Streaming
+| Resource | Link |
+|----------|------|
+| Spark Structured Streaming Guide | https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html |
+| Auto Loader (cloudFiles) | https://docs.databricks.com/en/ingestion/auto-loader/index.html |
+| Streaming Triggers | https://docs.databricks.com/en/structured-streaming/triggers.html |
+| Watermarking | https://docs.databricks.com/en/structured-streaming/watermarks.html |
+| Checkpoint Best Practices | https://docs.databricks.com/en/structured-streaming/production.html |
 
-### Day 3 — Delta Lake
-- [Delta Lake Guide](https://docs.databricks.com/en/delta/index.html)
-- [MERGE INTO](https://docs.databricks.com/en/sql/language-manual/delta-merge-into.html)
-- [Delta Time Travel](https://docs.databricks.com/en/delta/history.html)
-- [OPTIMIZE and ZORDER](https://docs.databricks.com/en/delta/optimize.html)
-- [Liquid Clustering](https://docs.databricks.com/en/delta/clustering.html)
-- [Change Data Feed](https://docs.databricks.com/en/delta/delta-change-data-feed.html)
+### Delta Live Tables
+| Resource | Link |
+|----------|------|
+| DLT Overview | https://docs.databricks.com/en/delta-live-tables/index.html |
+| DLT Python API | https://docs.databricks.com/en/delta-live-tables/python-ref.html |
+| DLT SQL Syntax | https://docs.databricks.com/en/delta-live-tables/sql-ref.html |
+| DLT Expectations | https://docs.databricks.com/en/delta-live-tables/expectations.html |
+| DLT Pipeline Modes | https://docs.databricks.com/en/delta-live-tables/updates.html |
 
-### Day 4 — Structured Streaming
-- [Structured Streaming Guide](https://docs.databricks.com/en/structured-streaming/index.html)
-- [Trigger Types](https://docs.databricks.com/en/structured-streaming/triggers.html)
-- [Windowed Aggregations](https://docs.databricks.com/en/structured-streaming/window.html)
-- [Streaming Checkpoints](https://docs.databricks.com/en/structured-streaming/checkpoints.html)
-- [Auto Loader as Streaming Source](https://docs.databricks.com/en/ingestion/auto-loader/index.html)
+### Unity Catalog
+| Resource | Link |
+|----------|------|
+| Unity Catalog Overview | https://docs.databricks.com/en/data-governance/unity-catalog/index.html |
+| Privileges & Securables | https://docs.databricks.com/en/data-governance/unity-catalog/manage-privileges/index.html |
+| Row Filters & Column Masks | https://docs.databricks.com/en/data-governance/unity-catalog/row-and-column-filters.html |
+| Data Lineage | https://docs.databricks.com/en/data-governance/unity-catalog/data-lineage.html |
+| Volumes | https://docs.databricks.com/en/connect/unity-catalog/volumes.html |
 
-### Day 5 — DLT, Jobs & CI/CD
-- [Delta Live Tables Overview](https://docs.databricks.com/en/delta-live-tables/index.html)
-- [DLT Python API Reference](https://docs.databricks.com/en/delta-live-tables/python-ref.html)
-- [DLT SQL Reference](https://docs.databricks.com/en/delta-live-tables/sql-ref.html)
-- [DLT Expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html)
-- [Lakeflow Jobs (Workflows)](https://docs.databricks.com/en/workflows/index.html)
-- [Task Values (taskValues API)](https://docs.databricks.com/en/workflows/jobs/share-task-context.html)
-- [Databricks Asset Bundles](https://docs.databricks.com/en/dev-tools/bundles/index.html)
-- [GitHub Actions CI/CD with DABs](https://docs.databricks.com/en/dev-tools/bundles/ci-cd.html)
+### Apache Spark
+| Resource | Link |
+|----------|------|
+| Spark SQL Functions Reference | https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/functions.html |
+| Window Functions | https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/window.html |
+| Higher-Order Functions | https://docs.databricks.com/en/sql/language-manual/sql-ref-higher-order-functions.html |
+| DataFrame API | https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/dataframe.html |
 
-### Day 6 — Unity Catalog & Governance
-- [Unity Catalog on Azure](https://docs.databricks.com/en/data-governance/unity-catalog/azure.html)
-- [Unity Catalog Privileges Reference](https://docs.databricks.com/en/data-governance/unity-catalog/manage-privileges/privileges.html)
-- [Row Filters and Column Masks](https://docs.databricks.com/en/data-governance/unity-catalog/row-and-column-filters.html)
-- [Data Lineage](https://docs.databricks.com/en/data-governance/unity-catalog/data-lineage.html)
-- [Audit Logging](https://docs.databricks.com/en/administration-guide/account-settings/audit-logs.html)
-
----
-
-## 📝 Practice Exams & Question Banks
-
-| Resource | Type | Link |
-|---|---|---|
-| CertSafari | Practice questions | [certsafari.com](https://www.certsafari.com/exams/databricks-certified-data-engineer-associate) |
-| Udemy — Derar Alhussein | Full course + exam | [Udemy listing](https://www.udemy.com/course/databricks-certified-data-engineer-associate-practice-exams/) |
-| Databricks Sample Questions | Official | [Exam guide PDF](https://www.databricks.com/sites/default/files/2024-04/Exam-Guide-Databricks-Certified-Data-Engineer-Associate.pdf) |
+### Lakeflow Jobs (Workflows)
+| Resource | Link |
+|----------|------|
+| Workflows Overview | https://docs.databricks.com/en/workflows/index.html |
+| Task Values (taskValues.set/get) | https://docs.databricks.com/en/workflows/jobs/pass-context-key-value-pairs-task.html |
+| Job Clusters vs All-Purpose | https://docs.databricks.com/en/compute/jobs.html |
+| CI/CD with Databricks | https://docs.databricks.com/en/dev-tools/ci-cd/index.html |
 
 ---
 
-## 🛠️ Free Tools for Hands-On Practice
+## 📺 Video & Course Resources
+
+| Resource | Link |
+|----------|------|
+| Databricks Academy — Free Courses | https://www.databricks.com/learn/training/catalog |
+| Data Engineer Learning Path | https://www.databricks.com/learn/training/data-engineer-learning-path |
+| Delta Lake Fundamentals (free) | https://www.databricks.com/learn/training/lakehouse-fundamentals |
+| YouTube: Databricks Official Channel | https://www.youtube.com/@Databricks |
+
+---
+
+## 🧹 Practice & Mock Exams
+
+| Resource | Link |
+|----------|------|
+| Official Databricks Practice Exam | https://www.databricks.com/learn/certification/data-engineer-associate#practice-exam |
+| Udemy — Databricks DE Associate Practice Tests | https://www.udemy.com/course/databricks-certified-data-engineer-associate-practice-exam/ |
+| Whizlabs Databricks Practice Tests | https://www.whizlabs.com/databricks-certified-data-engineer-associate/ |
+| Community exam discussion threads | https://community.databricks.com/t5/forums/filteredbylabelpage/board-id/databricks-certification-forums |
+
+---
+
+## 🔧 Tools Used in This Repo
 
 | Tool | Purpose | Link |
-|---|---|---|
-| Azure Free Account | Host your workspace | [azure.microsoft.com/free](https://azure.microsoft.com/en-us/free/) |
-| Databricks Community Edition | SQL/DLT concepts only | [community.cloud.databricks.com](https://community.cloud.databricks.com) |
-| Databricks CLI | DABs deploy/run | [CLI docs](https://docs.databricks.com/en/dev-tools/cli/index.html) |
-| DBeaver (free) | SQL client for testing | [dbeaver.io](https://dbeaver.io) |
-
----
-
-## 📅 Recommended Daily Schedule
-
-| Time | Activity |
-|---|---|
-| Morning (2h) | Read `study-notes.md` for the day |
-| Mid-morning (2h) | Watch Databricks Academy videos |
-| Afternoon (2h) | Complete `practice-tasks.md` in Azure Databricks |
-| Evening (1h) | CertSafari practice questions (filter by today's domain) |
-
----
-
-## 🔗 Exam Registration
-
-- **Register:** [Databricks Certification Portal](https://www.webassessor.com/databricks)
-- **Exam guide PDF:** [DE Associate Exam Guide](https://www.databricks.com/sites/default/files/2024-04/Exam-Guide-Databricks-Certified-Data-Engineer-Associate.pdf)
-- **Cost:** $200
-- **Duration:** 90 minutes, 45 questions, multiple-choice
-- **Passing score:** ~70% (not officially published; ~32/45 is typically safe)
+|------|---------|------|
+| Azure Databricks | Primary platform | https://portal.azure.com → search Databricks |
+| Databricks CLI | DABs deploy, workspace management | https://docs.databricks.com/en/dev-tools/cli/index.html |
+| Delta Lake | Table format for all storage | https://delta.io |
+| Unity Catalog | Data governance & access control | Built-in to Premium workspace |
+| Auto Loader | Incremental file ingestion | Built-in to Databricks |
+| DLT | Declarative pipelines | Built-in to Databricks |
