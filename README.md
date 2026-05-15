@@ -1,163 +1,120 @@
-# 🎯 Databricks Data Engineer Associate — 7-Day Intensive Prep
+# Databricks Data Engineer Associate — 7-Day Prep Guide
+### ☁️ Azure Databricks Edition
 
-> **Exam:** Databricks Certified Data Engineer Associate (updated syllabus July 2025)  
-> **Format:** 45 multiple-choice questions · 90 minutes · $200  
-> **Goal:** Pass in 7 days with focused, hands-on study  
-> **Environment:** ☁️ **Azure Databricks** (full-featured, Unity Catalog enabled)
+A structured 7-day study plan for the **Databricks Certified Data Engineer Associate** exam, fully updated for **Azure Databricks** with Unity Catalog.
 
 ---
 
-## ☁️ Azure Databricks Setup (Do This First)
+## ☁️ Platform: Azure Databricks
 
-### 1. Create Your Workspace
+This guide uses **Azure Databricks** (not Community Edition).  
+All paths, storage references, and setup steps below are Azure-specific.
 
-1. Go to [portal.azure.com](https://portal.azure.com) → **Create a resource** → Search **Azure Databricks**
-2. Fill in:
-   - **Subscription**: Your Azure subscription
-   - **Resource Group**: `databricks-prep-rg` (create new)
-   - **Workspace name**: `databricks-de-prep`
-   - **Region**: West Europe (Munich is closest)
-   - **Pricing Tier**: `Trial (Premium – 14 Days Free DBUs)` ← avoids DBU charges
-3. **Review + Create** → **Create** (~2 min). Then click **Launch Workspace**.
+### Prerequisites
+- Azure subscription (free trial works: https://azure.microsoft.com/free/)
+- Azure Databricks workspace (Premium tier — required for Unity Catalog)
+- Basic Python and SQL knowledge
 
-### 2. Create Your Learning Cluster (once)
+---
 
-| Setting | Value |
-|---|---|
-| **Name** | `learning-cluster` |
-| **Runtime** | Latest LTS (e.g. 16.x LTS) |
-| **Mode** | Single Node |
-| **Node type** | `Standard_DS3_v2` (4 vCPU, 14 GB) |
-| **Auto-termination** | **30 minutes** ← always set this |
-| **Access mode** | Single User |
+## 🚀 One-Time Setup (Do This First)
 
-### 3. Create Practice Catalog, Schema & Volume (run once in a notebook)
+### Step 1 — Provision Azure Databricks Workspace
+
+1. Go to [portal.azure.com](https://portal.azure.com)
+2. Search **Azure Databricks** → **Create**
+3. Fill in:
+   - **Resource Group**: create new → `databricks-prep-rg`
+   - **Workspace name**: `databricks-prep`
+   - **Region**: West Europe (or nearest to you)
+   - **Pricing tier**: **Premium** (required for Unity Catalog)
+4. Click **Review + Create** → **Create**
+5. Wait ~3 min → **Launch Workspace**
+
+### Step 2 — Create a Learning Cluster
+
+In your Databricks workspace:
+
+1. Go to **Compute** → **Create compute**
+2. Settings:
+   - **Policy**: Unrestricted
+   - **Access mode**: Single User (your email)
+   - **Databricks Runtime**: `15.4 LTS (Scala 2.12, Spark 3.5.0)` or latest LTS
+   - **Node type**: `Standard_DS3_v2` (14 GB RAM, 4 cores — cheapest that works)
+   - **Auto termination**: 30 minutes (important for cost control)
+   - **Single node**: ✅ checked (sufficient for all practice tasks)
+3. Click **Create compute**
+
+> 💡 **Cost tip**: Always check auto-termination is enabled. Stop the cluster manually when done studying.
+
+### Step 3 — Set Up Unity Catalog Namespace
+
+Open a notebook attached to your cluster and run:
 
 ```sql
-CREATE CATALOG  IF NOT EXISTS training  COMMENT 'DE Associate exam prep';
-CREATE SCHEMA   IF NOT EXISTS training.prep COMMENT 'Shared practice schema';
-CREATE VOLUME   IF NOT EXISTS training.prep.landing COMMENT 'File landing zone';
+-- Create the catalog used throughout all practice tasks
+CREATE CATALOG IF NOT EXISTS training
+  COMMENT 'Databricks DE Associate exam prep catalog';
+
+CREATE SCHEMA IF NOT EXISTS training.prep
+  COMMENT '7-day study plan practice schema';
+
+USE CATALOG training;
+USE SCHEMA prep;
+
+SELECT current_catalog(), current_schema(), current_user();
 ```
 
-All practice tasks use:
-- **Catalog:** `training`
-- **Schema:** `training.prep`
-- **Volume path:** `/Volumes/training/prep/landing/`
-- **Checkpoints:** `/Volumes/training/prep/landing/checkpoints/<query-name>/`
+### Step 4 — Create a Unity Catalog Volume (landing zone)
 
-### 4. Key Azure Databricks URLs
+```sql
+-- Create a managed Volume for file-based exercises
+CREATE VOLUME IF NOT EXISTS training.prep.landing
+  COMMENT 'Landing zone for CSV, JSON, and streaming files';
+```
 
-| Resource | URL |
-|---|---|
-| Azure Portal | https://portal.azure.com |
-| Workspace | `https://adb-<id>.<n>.azuredatabricks.net` |
-| Unity Catalog docs | https://docs.databricks.com/en/data-governance/unity-catalog/azure.html |
-| ADLS Gen2 docs | https://docs.databricks.com/en/connect/storage/azure-storage.html |
-| Azure Databricks pricing | https://azure.microsoft.com/en-us/pricing/details/databricks/ |
+Verify the volume path in Python:
+```python
+display(dbutils.fs.ls("/Volumes/training/prep/landing/"))
+```
 
-> 💡 **Cost guardrail:** Always set **Auto Termination = 30 min**. A `Standard_DS3_v2` single-node costs ~$0.20–0.30/hr in DBUs + Azure VM cost. The 14-day Premium trial covers DBUs.
+### Step 5 — Install Databricks CLI (optional, for DABs/CI-CD on Day 5)
 
----
-
-## 📋 Exam Topics (Current Syllabus — July 2025)
-
-| Domain | Weight | Day |
-|---|---|---|
-| 1. Databricks Intelligence Platform | ~20% | Day 1 |
-| 2. Development & Ingestion (ELT, PySpark, SQL) | ~25% | Day 2–3 |
-| 3. Data Processing & Transformations (Delta, Streaming) | ~20% | Day 3–4 |
-| 4. Productionizing Data Pipelines (DLT, Workflows, CI/CD) | ~20% | Day 5 |
-| 5. Data Governance & Quality (Unity Catalog) | ~15% | Day 6 |
-| **Review + Mock Exams** | — | Day 7 |
+```bash
+# On your local machine
+pip install databricks-cli
+databricks configure --token
+# Enter: https://adb-<your-workspace-id>.azuredatabricks.net
+# Enter: your Personal Access Token (Settings → Developer → Access tokens)
+```
 
 ---
 
-## 🗓️ 7-Day Study Plan
+## 📅 7-Day Study Plan
 
-### Day 1 — Databricks Intelligence Platform
-📂 [`day1/`](./day1/)
-- Architecture: Lakehouse, Delta Lake, Unity Catalog overview
-- Databricks workspace: clusters, notebooks, repos
-- Storage: DBFS, external locations, **Unity Catalog Volumes**, ADLS Gen2
-- **Practice:** Set up Azure Databricks workspace, create cluster & UC structure
-
-### Day 2 — Ingestion, PySpark & SQL
-📂 [`day2/`](./day2/) · 📓 [`notebooks/day2_spark_basics.py`](./notebooks/day2_spark_basics.py)
-- PySpark DataFrames: transformations, joins, window functions
-- Auto Loader (`cloudFiles`), write modes
-- SQL: CTEs, window functions, PIVOT
-- **Practice:** Ingest data via Auto Loader into UC managed tables
-
-### Day 3 — Delta Lake Deep Dive
-📂 [`day3/`](./day3/) · 📓 [`notebooks/day3_delta_lake.py`](./notebooks/day3_delta_lake.py)
-- CRUD, MERGE, time travel, RESTORE
-- OPTIMIZE, ZORDER, Liquid Clustering, VACUUM
-- Schema evolution, Change Data Feed (CDF)
-- Medallion architecture (Bronze/Silver/Gold)
-- **Practice:** Full Delta Lake lifecycle with UC managed tables
-
-### Day 4 — Structured Streaming
-📂 [`day4/`](./day4/) · 📓 [`notebooks/day4_streaming.py`](./notebooks/day4_streaming.py)
-- readStream / writeStream, trigger types
-- Windowed aggregations + watermarking
-- Checkpoints stored in **Unity Catalog Volumes** (not `/tmp/`)
-- Auto Loader as streaming source
-- **Practice:** Delta→Delta streams, Auto Loader streaming, window agg
-
-### Day 5 — Delta Live Tables, Lakeflow Jobs & CI/CD
-📂 [`day5/`](./day5/) · 📓 [`notebooks/day5_dlt_pipeline.py`](./notebooks/day5_dlt_pipeline.py)
-- DLT: `@dlt.table`, `@dlt.expect`, streaming tables vs materialized views
-- Lakeflow Jobs: multi-task workflows, `taskValues`, job clusters
-- Databricks Asset Bundles (DABs), CI/CD with GitHub Actions
-- Azure Key Vault secret scopes
-- **Practice:** Real DLT pipeline in Azure Databricks (not simulated)
-
-### Day 6 — Unity Catalog & Data Governance
-📂 [`day6/`](./day6/)
-- 3-level namespace, data objects, external locations
-- Grants, Row/Column-Level Security
-- Data lineage, audit logging
-- **Practice:** Full UC governance exercises
-
-### Day 7 — Review & Mock Exams
-📂 [`day7/`](./day7/)
-- 3 full mock exams with answer keys
-- Domain-by-domain gap analysis
-- Exam day checklist
+| Day | Topic | Key Skills |
+|-----|-------|------------|
+| [Day 1](./day1/) | Databricks Platform & Unity Catalog | Workspace, clusters, notebooks, UC namespaces |
+| [Day 2](./day2/) | Apache Spark Fundamentals | DataFrames, transformations, actions, SQL |
+| [Day 3](./day3/) | Delta Lake Deep Dive | ACID, time travel, MERGE, OPTIMIZE, VACUUM |
+| [Day 4](./day4/) | Structured Streaming | readStream, writeStream, triggers, Auto Loader |
+| [Day 5](./day5/) | DLT, Lakeflow Jobs & CI/CD | Delta Live Tables, Workflows, DABs, secrets |
+| [Day 6](./day6/) | Unity Catalog & Data Governance | Lineage, row/column security, audit logs |
+| [Day 7](./day7/) | Mock Exam & Review | Full practice test, weak-spot review |
 
 ---
 
-## 📁 Repository Structure
+## 📁 Repo Structure
 
 ```
 databricks-de-associate-prep/
-├── README.md                    ← This file (start here)
-├── cheatsheet.md                ← Complete exam cheat sheet
-├── resources.md                 ← All study links and resources
+├── README.md              ← This file (start here)
+├── cheatsheet.md          ← Quick reference for the exam
+├── resources.md           ← Links, docs, practice tests
 ├── day1/
-│   ├── study-notes.md
-│   └── practice-tasks.md
-├── day2/
-│   ├── study-notes.md
-│   └── practice-tasks.md
-├── day3/
-│   ├── study-notes.md
-│   └── practice-tasks.md
-├── day4/
-│   ├── study-notes.md
-│   └── practice-tasks.md
-├── day5/
-│   ├── study-notes.md
-│   └── practice-tasks.md
-├── day6/
-│   ├── study-notes.md
-│   └── practice-tasks.md
-├── day7/
-│   ├── study-notes.md
-│   ├── mock-exam-1.md
-│   ├── mock-exam-2.md
-│   ├── mock-exam-3.md
-│   └── exam-day-checklist.md
+│   ├── study-notes.md     ← Concept notes
+│   └── practice-tasks.md ← Hands-on exercises
+├── day2/ … day7/          ← Same structure per day
 └── notebooks/
     ├── day2_spark_basics.py
     ├── day3_delta_lake.py
@@ -167,42 +124,45 @@ databricks-de-associate-prep/
 
 ---
 
-## ⚡ Quick Start (After Workspace Setup)
+## 🗂️ Unity Catalog Namespace Used Throughout
 
-```sql
--- Run this once in any notebook to initialize your practice environment
-CREATE CATALOG  IF NOT EXISTS training  COMMENT 'DE Associate exam prep';
-CREATE SCHEMA   IF NOT EXISTS training.prep COMMENT 'Practice schema (all days use this)';
-CREATE VOLUME   IF NOT EXISTS training.prep.landing COMMENT 'File landing zone for all exercises';
+| Layer | Value |
+|-------|-------|
+| **Catalog** | `training` |
+| **Schema** | `prep` |
+| **Full prefix** | `training.prep.<table>` |
+| **Volume path** | `/Volumes/training/prep/landing/` |
 
-USE CATALOG training;
-USE SCHEMA prep;
-SELECT current_catalog(), current_schema(), current_user();
-```
-
-Then import notebooks from the `notebooks/` folder via **Workspace → Import** and attach them to `learning-cluster`.
+All practice tasks use `training.prep` as the default namespace. Run `USE CATALOG training; USE SCHEMA prep;` at the start of every notebook session.
 
 ---
 
-## 📌 Azure vs Community Edition — Key Differences
+## 📚 Key Resources
 
-| Feature | Community Edition ❌ | Azure Databricks ✅ |
-|---|---|---|
-| Unity Catalog | Not available | Fully supported |
-| Delta Live Tables | Not available | Fully supported |
-| Lakeflow Jobs | Not available | Fully supported |
-| Multi-node clusters | Not available | Fully supported |
-| ADLS Gen2 storage | Not available | Native integration |
-| Azure Key Vault secrets | Not available | Native integration |
-| SQL Warehouses | Not available | Supported |
-| Volumes (`/Volumes/`) | Not available | Fully supported |
-
-> 🎯 **This repo is written exclusively for Azure Databricks.** All file paths, storage patterns, and features assume a Unity Catalog-enabled Azure workspace.
+- [Azure Databricks Docs](https://learn.microsoft.com/en-us/azure/databricks/)
+- [Exam Guide — Data Engineer Associate](https://www.databricks.com/learn/certification/data-engineer-associate)
+- [Delta Lake Docs](https://docs.delta.io/latest/index.html)
+- [Unity Catalog Docs](https://docs.databricks.com/en/data-governance/unity-catalog/index.html)
+- [Structured Streaming Guide](https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html)
+- [Full cheatsheet →](./cheatsheet.md)
+- [All resources →](./resources.md)
 
 ---
 
-## 🔗 Exam Registration
+## ✅ Exam Quick Facts
 
-- **Register:** [Databricks Certification Portal](https://www.webassessor.com/databricks)
-- **Exam guide:** [DE Associate Exam Guide (PDF)](https://www.databricks.com/sites/default/files/2024-04/Exam-Guide-Databricks-Certified-Data-Engineer-Associate.pdf)
-- **Cost:** $200 (vouchers sometimes available via Databricks Academy)
+| Item | Detail |
+|------|--------|
+| **Duration** | 90 minutes |
+| **Questions** | 45 multiple choice |
+| **Passing score** | ~70% |
+| **Format** | Online proctored |
+| **Cost** | $200 USD |
+| **Validity** | 2 years |
+
+**Exam topic weights (approximate):**
+- Databricks Lakehouse Platform — 24%
+- ELT with Apache Spark — 29%
+- Incremental Data Processing — 22%
+- Production Pipelines — 16%
+- Data Governance — 9%
