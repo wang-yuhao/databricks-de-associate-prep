@@ -1,350 +1,302 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Day 2 — PySpark & SQL Fundamentals on Azure Databricks
+# MAGIC # Day 2 — Apache Spark Basics
+# MAGIC ### ☁️ Azure Databricks Edition
 # MAGIC
-# MAGIC **Environment:** Azure Databricks (Unity Catalog enabled)  
-# MAGIC **Cluster:** Single Node, DBR 15.x LTS, `Standard_DS3_v2`  
-# MAGIC **Estimated time:** 2–3 hours
+# MAGIC **Catalog / Schema:** `training.prep`
+# MAGIC **Volume:** `/Volumes/training/prep/landing/`
 # MAGIC
-# MAGIC ## Setup Instructions
-# MAGIC 1. Attach this notebook to your `learning-cluster` (created in Day 1)
-# MAGIC 2. All data is stored as Unity Catalog managed tables — no external storage config needed
-# MAGIC 3. Run cells top-to-bottom
+# MAGIC Run cells top-to-bottom. Every table write uses Unity Catalog managed tables.
 
 # COMMAND ----------
-# MAGIC %md ## Cell 0 — Create Practice Catalog & Schema
+# Cell 0 — Set default namespace for this notebook session
+spark.sql("USE CATALOG training")
+spark.sql("USE SCHEMA prep")
+print("Catalog:", spark.sql("SELECT current_catalog()").collect()[0][0])
+print("Schema: ", spark.sql("SELECT current_schema()").collect()[0][0])
+print("User:   ", spark.sql("SELECT current_user()").collect()[0][0])
+print("Spark:  ", spark.version)
 
 # COMMAND ----------
-# MAGIC %sql
-# MAGIC -- Create a dedicated catalog and schema for Day 2 practice
-# MAGIC -- Note: requires CREATE CATALOG privilege (workspace admin has this by default)
-# MAGIC CREATE CATALOG IF NOT EXISTS training
-# MAGIC   COMMENT 'Practice catalog for DE Associate exam prep';
-# MAGIC
-# MAGIC CREATE SCHEMA IF NOT EXISTS training.day2
-# MAGIC   COMMENT 'Day 2: PySpark and SQL exercises';
-# MAGIC
-# MAGIC USE CATALOG training;
-# MAGIC USE SCHEMA day2;
-# MAGIC
-# MAGIC SELECT current_catalog(), current_schema();
+# MAGIC %md ## 1. Create Sample Data
 
 # COMMAND ----------
-# MAGIC %md ## Cell 1 — Create Sample DataFrames
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, DateType
+from pyspark.sql.functions import col, lit, when, coalesce, to_date
+import datetime
 
-# COMMAND ----------
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
-from pyspark.sql.functions import col, when, avg, count, sum as spark_sum, broadcast
-
-# Employee data
-emp_data = [
-    (1, "Alice",   "Engineering", 95000, "2020-01-15"),
-    (2, "Bob",     "Marketing",   72000, "2019-03-01"),
-    (3, "Charlie", "Engineering", 88000, "2021-06-01"),
-    (4, "Diana",   "HR",          65000, "2018-07-20"),
-    (5, "Eve",     "Marketing",   78000, "2022-01-10"),
-    (6, "Frank",   None,          92000, "2020-04-15"),  # null department
-]
-emp_schema = StructType([
-    StructField("id",         IntegerType(), True),
-    StructField("name",       StringType(),  True),
-    StructField("department", StringType(),  True),
-    StructField("salary",     IntegerType(), True),
-    StructField("hire_date",  StringType(),  True),
+schema = StructType([
+    StructField("order_id",   IntegerType(), nullable=False),
+    StructField("customer",   StringType()),
+    StructField("product",    StringType()),
+    StructField("region",     StringType()),
+    StructField("amount",     DoubleType()),
+    StructField("order_date", StringType()),
+    StructField("status",     StringType()),
 ])
-employees = spark.createDataFrame(emp_data, emp_schema)
 
-# Department data
-dept_data = [
-    ("Engineering", "Munich"),
-    ("Marketing",   "Berlin"),
-    ("HR",          "Hamburg"),
+data = [
+    (1,  "Alice",   "Widget A",  "EU",   150.00, "2024-01-10", "completed"),
+    (2,  "Bob",     "Widget B",  "US",   200.00, "2024-01-11", "completed"),
+    (3,  "Carol",   "Gadget X",  "EU",   350.00, "2024-01-12", "pending"),
+    (4,  "Dave",    "Widget A",  "APAC", 100.00, "2024-01-13", "completed"),
+    (5,  "Eve",     "Device Z",  "US",   500.00, "2024-01-14", "cancelled"),
+    (6,  "Frank",   "Gadget X",  "EU",   280.00, "2024-01-15", "completed"),
+    (7,  "Grace",   "Widget B",  "APAC", 180.00, "2024-01-15", "completed"),
+    (8,  "Hank",    "Device Z",  "US",   450.00, "2024-01-16", "completed"),
+    (9,  "Iris",    "Widget A",  "EU",   None,   "2024-01-17", "pending"),   # null amount
+    (10, "Jack",    None,        "US",   120.00, "2024-01-17", "completed"), # null product
 ]
-departments = spark.createDataFrame(dept_data, ["dept_name", "city"])
 
-print("DataFrames created successfully")
-employees.show()
-departments.show()
-
-# COMMAND ----------
-# MAGIC %md ## Cell 2 — Save as Unity Catalog Managed Tables
+df = spark.createDataFrame(data, schema).withColumn("order_date", to_date(col("order_date")))
+print("Rows:", df.count())
+df.printSchema()
+df.show(truncate=False)
 
 # COMMAND ----------
-# Save as managed Delta tables in Unity Catalog (no LOCATION needed — UC manages storage)
-employees.write.mode("overwrite").saveAsTable("training.day2.employees")
-departments.write.mode("overwrite").saveAsTable("training.day2.departments")
-
-print("Tables saved to Unity Catalog:")
-print("  - training.day2.employees")
-print("  - training.day2.departments")
+# MAGIC %md ## 2. Transformations vs Actions
 
 # COMMAND ----------
-# MAGIC %md ## Cell 3 — Read from Unity Catalog Tables
+# Transformations are LAZY — they build an execution plan but do not run
+filtered   = df.filter(col("amount") > 200)              # lazy
+with_vat   = df.withColumn("vat", col("amount") * 0.20) # lazy
+selected   = df.select("order_id", "customer", "amount") # lazy
+renamed    = df.withColumnRenamed("customer", "buyer")   # lazy
+
+# Actions TRIGGER execution
+print("count():   ", df.count())                # action
+print("first():   ", df.first()["customer"])    # action
+print("take(3):   ", [r["order_id"] for r in df.take(3)])  # action
+filtered.show()                                 # action — also shows result
 
 # COMMAND ----------
-# Always read from Unity Catalog tables in Azure Databricks — not from /tmp/ paths
-df_emp  = spark.table("training.day2.employees")
-df_dept = spark.table("training.day2.departments")
-
-print("Schema:")
-df_emp.printSchema()
-df_emp.show()
+# MAGIC %md ## 3. Filter, Select, WithColumn, Drop
 
 # COMMAND ----------
-# MAGIC %md ## Cell 4 — DataFrame Transformations
+# Filter with multiple conditions
+df_eu_completed = df.filter((col("region") == "EU") & (col("status") == "completed"))
+print("EU completed:", df_eu_completed.count())
 
-# COMMAND ----------
-# 4a: Select + computed column
-result_4a = (
-    df_emp
-    .select("id", "name", "salary")
-    .withColumn("senior", when(col("salary") > 85000, True).otherwise(False))
+# withColumn: add derived column
+df_with_discount = df.withColumn(
+    "discounted_amount",
+    when(col("region") == "EU", col("amount") * 0.9)
+    .when(col("region") == "US", col("amount") * 0.95)
+    .otherwise(col("amount"))
 )
-result_4a.show()
+df_with_discount.select("customer", "region", "amount", "discounted_amount").show()
 
-# 4b: Filter
-result_4b = df_emp.filter(
-    (col("department") == "Engineering") & (col("salary") > 90000)
-)
-result_4b.show()
+# coalesce: fill nulls
+df_no_nulls = df.withColumn("amount",  coalesce(col("amount"),  lit(0.0))) \
+                .withColumn("product", coalesce(col("product"), lit("Unknown")))
+df_no_nulls.filter(col("order_id").isin(9, 10)).show()
 
-# 4c: Handle nulls
-result_4c = df_emp.na.fill({"department": "Unknown"})
-result_4c.show()
+# drop: remove column
+df_no_status = df.drop("status")
+print("Columns after drop:", df_no_status.columns)
 
-# 4d: Group + aggregate
-result_4d = (
-    df_emp
-    .na.fill({"department": "Unknown"})
-    .groupBy("department")
+# COMMAND ----------
+# MAGIC %md ## 4. GroupBy + Aggregations
+
+# COMMAND ----------
+from pyspark.sql.functions import count, sum as spark_sum, avg, min as spark_min, max as spark_max
+
+# Basic aggregation
+df_agg = (df.filter(col("amount").isNotNull())
+    .groupBy("region")
     .agg(
-        count("*").alias("headcount"),
-        avg("salary").alias("avg_salary"),
+        count("*").alias("total_orders"),
+        spark_sum("amount").alias("total_revenue"),
+        avg("amount").alias("avg_order_value"),
+        spark_max("amount").alias("max_order"),
     )
-    .orderBy(col("avg_salary").desc())
+    .orderBy(col("total_revenue").desc())
 )
-result_4d.show()
+df_agg.show()
 
-# COMMAND ----------
-# MAGIC %md ## Cell 5 — Joins
-
-# COMMAND ----------
-# Inner join (default)
-df_inner = df_emp.join(df_dept, df_emp.department == df_dept.dept_name, "inner")
-df_inner.select("name", "department", "city", "salary").show()
-
-# Left join — keep all employees, even those with no matching dept
-df_left = df_emp.join(df_dept, df_emp.department == df_dept.dept_name, "left")
-df_left.select("name", "department", "city").show()
-
-# Broadcast join — force small table to be broadcast (avoids shuffle)
-df_broadcast = df_emp.join(broadcast(df_dept), df_emp.department == df_dept.dept_name)
-df_broadcast.select("name", "department", "city").show()
-print("Broadcast join complete — note the broadcast hint in query plan:")
-df_broadcast.explain()
-
-# COMMAND ----------
-# MAGIC %md ## Cell 6 — Window Functions
-
-# COMMAND ----------
-from pyspark.sql.functions import rank, row_number, lag, dense_rank
-from pyspark.sql import Window
-
-window_dept = Window.partitionBy("department").orderBy(col("salary").desc())
-window_global = Window.orderBy("hire_date")
-
-df_window = (
-    df_emp
-    .na.fill({"department": "Unknown"})
-    .withColumn("rank_in_dept",    rank().over(window_dept))
-    .withColumn("row_num_in_dept", row_number().over(window_dept))
-    .withColumn("dense_rank",      dense_rank().over(window_dept))
-    .withColumn("prev_hire_salary", lag("salary", 1).over(window_global))
+# Multi-key groupBy
+df_region_product = (df.filter(col("amount").isNotNull())
+    .groupBy("region", "product")
+    .agg(spark_sum("amount").alias("revenue"))
+    .orderBy("region", col("revenue").desc())
 )
-df_window.show()
+df_region_product.show()
 
 # COMMAND ----------
-# MAGIC %md ## Cell 7 — Reading Different File Formats (from Unity Catalog Volumes)
+# MAGIC %md ## 5. Joins
 
 # COMMAND ----------
-# MAGIC %sql
-# MAGIC -- Create a volume to use as a file landing area (replaces /tmp/ in Community Edition)
-# MAGIC CREATE VOLUME IF NOT EXISTS training.day2.files
-# MAGIC   COMMENT 'Landing area for sample files in Day 2 practice';
+# Customer dimension table
+customer_data = [
+    ("Alice", "alice@example.com",  "premium"),
+    ("Bob",   "bob@example.com",    "standard"),
+    ("Carol", "carol@example.com",  "premium"),
+    ("Dave",  "dave@example.com",   "standard"),
+    ("Eve",   "eve@example.com",    "premium"),
+]
+df_customers = spark.createDataFrame(customer_data, ["customer", "email", "tier"])
+
+# Inner join
+df_inner = df.join(df_customers, on="customer", how="inner")
+print("Inner join rows:", df_inner.count())  # 9 (Jack has no customer record)
+df_inner.select("order_id", "customer", "tier", "amount").show()
+
+# Left join (keeps all orders including Jack)
+df_left = df.join(df_customers, on="customer", how="left")
+print("Left join rows:", df_left.count())    # 10
+df_left.filter(col("tier").isNull()).show()  # Jack's order with null tier
+
+# Anti join (orders with no customer record)
+df_anti = df.join(df_customers, on="customer", how="left_anti")
+print("Anti join (no customer match):", df_anti.count())
+df_anti.show()
 
 # COMMAND ----------
-# Write a sample CSV to the volume
-sample_df = spark.createDataFrame(
-    [(1, "Alice", 95000.0), (2, "Bob", 72000.0), (3, "Charlie", 88000.0)],
-    ["id", "name", "salary"]
+# MAGIC %md ## 6. Window Functions
+
+# COMMAND ----------
+from pyspark.sql.window import Window
+from pyspark.sql.functions import rank, dense_rank, row_number, lag, lead, sum as wsum
+
+# Rank by amount within each region
+w_rank = Window.partitionBy("region").orderBy(col("amount").desc())
+
+df_ranked = (df.filter(col("amount").isNotNull())
+    .withColumn("rank",        rank().over(w_rank))
+    .withColumn("dense_rank",  dense_rank().over(w_rank))
+    .withColumn("row_number",  row_number().over(w_rank))
+    .select("order_id", "customer", "region", "amount", "rank", "dense_rank", "row_number")
+    .orderBy("region", "rank")
 )
+df_ranked.show()
 
-# Volume path: /Volumes/{catalog}/{schema}/{volume}/
-volume_path = "/Volumes/training/day2/files"
-sample_df.write.mode("overwrite").option("header", True).csv(f"{volume_path}/employees_sample")
-print(f"Written CSV to volume: {volume_path}/employees_sample/")
-
-# COMMAND ----------
-# Read CSV back from the volume
-df_csv = (
-    spark.read
-    .format("csv")
-    .option("header", True)
-    .option("inferSchema", True)
-    .load(f"{volume_path}/employees_sample")
+# Running total within region ordered by date
+w_running = Window.partitionBy("region").orderBy("order_date").rowsBetween(Window.unboundedPreceding, 0)
+df_running = (df.filter(col("amount").isNotNull())
+    .withColumn("running_total", wsum("amount").over(w_running))
+    .select("region", "order_date", "amount", "running_total")
+    .orderBy("region", "order_date")
 )
-print("Read from volume CSV:")
-df_csv.show()
+df_running.show()
 
-# Write Parquet to volume
-sample_df.write.mode("overwrite").parquet(f"{volume_path}/employees_parquet")
-
-# Read Parquet back
-df_parquet = spark.read.parquet(f"{volume_path}/employees_parquet")
-print("Read Parquet from volume:")
-df_parquet.show()
+# lag/lead: compare to previous/next row
+w_lag = Window.partitionBy("region").orderBy("order_date")
+df_lag = (df.filter(col("amount").isNotNull())
+    .withColumn("prev_amount", lag("amount", 1).over(w_lag))
+    .withColumn("next_amount", lead("amount", 1).over(w_lag))
+    .withColumn("delta",       col("amount") - col("prev_amount"))
+    .select("region", "order_date", "amount", "prev_amount", "next_amount", "delta")
+    .orderBy("region", "order_date")
+)
+df_lag.show()
 
 # COMMAND ----------
-# MAGIC %md ## Cell 8 — Auto Loader (cloudFiles) on Unity Catalog Volume
+# MAGIC %md ## 7. Write to Unity Catalog (Managed Delta Tables)
 
 # COMMAND ----------
-# Auto Loader reads NEW files incrementally from a directory
-# On Azure Databricks: use /Volumes/ path (UC volume) or abfss:// (ADLS Gen2)
+# Write as managed Delta table — UC controls storage automatically
+df.write.mode("overwrite").saveAsTable("training.prep.day2_orders")
 
-# Step 1: Write some JSON files to volume to simulate landing data
+# Verify via SQL
+display(spark.sql("""
+    SELECT region, COUNT(*) AS orders, ROUND(SUM(amount),2) AS revenue
+    FROM training.prep.day2_orders
+    WHERE amount IS NOT NULL
+    GROUP BY region
+    ORDER BY revenue DESC
+"""))
+
+# Write partitioned (by region)
+(df.filter(col("amount").isNotNull())
+    .write
+    .mode("overwrite")
+    .partitionBy("region")
+    .saveAsTable("training.prep.day2_orders_partitioned")
+)
+print("Partitioned table written")
+spark.sql("DESCRIBE DETAIL training.prep.day2_orders_partitioned").select("numFiles", "partitionColumns").show(truncate=False)
+
+# COMMAND ----------
+# MAGIC %md ## 8. Write JSON Files to Volume (for file-based exercises)
+
+# COMMAND ----------
 import json
 
-orders = [
-    {"order_id": "O001", "customer": "Alice", "amount": 150.0, "status": "completed"},
-    {"order_id": "O002", "customer": "Bob",   "amount":  75.5, "status": "pending"},
-]
+# Write sample JSON files to the Unity Catalog Volume (landing zone)
+for i, row in enumerate(data[:5]):
+    record = {
+        "order_id":   row[0],
+        "customer":   row[1],
+        "product":    row[2],
+        "region":     row[3],
+        "amount":     row[4],
+        "order_date": row[5],
+        "status":     row[6],
+    }
+    dbutils.fs.put(
+        f"/Volumes/training/prep/landing/day2_json/order_{i:04d}.json",
+        json.dumps(record),
+        overwrite=True
+    )
 
-orders_df = spark.createDataFrame(orders)
-orders_df.write.mode("overwrite").json(f"{volume_path}/landing/orders_batch1")
-print("Simulated landing data written to volume")
-
-# COMMAND ----------
-# Step 2: Auto Loader reads from the volume directory
-auto_loader_df = (
-    spark.readStream
-    .format("cloudFiles")
-    .option("cloudFiles.format", "json")
-    .option("cloudFiles.inferColumnTypes", "true")
-    # schemaLocation stores the inferred schema checkpoint
-    .option("cloudFiles.schemaLocation", f"{volume_path}/autoloader_schema")
-    .load(f"{volume_path}/landing/")
+# Read back from Volume
+df_from_vol = (spark.read
+    .option("inferSchema", "true")
+    .json("/Volumes/training/prep/landing/day2_json/")
 )
+print("Rows from Volume:", df_from_vol.count())
+df_from_vol.show()
 
-# Write stream to Unity Catalog table
-auto_loader_query = (
-    auto_loader_df
-    .writeStream
-    .format("delta")
-    .outputMode("append")
-    .option("checkpointLocation", f"{volume_path}/autoloader_checkpoint")
-    .trigger(availableNow=True)  # process all available files then stop
-    .toTable("training.day2.orders_bronze")  # Unity Catalog managed table
+# COMMAND ----------
+# MAGIC %md ## 9. Spark SQL vs DataFrame API
+
+# COMMAND ----------
+# Both produce the same result — Spark SQL is easier for analysts
+# DataFrame API is better for programmatic transformations
+
+# DataFrame API
+df_api_result = (spark.table("training.prep.day2_orders")
+    .filter(col("status") == "completed")
+    .groupBy("region")
+    .agg(spark_sum("amount").alias("completed_revenue"))
+    .orderBy(col("completed_revenue").desc())
 )
+df_api_result.show()
 
-auto_loader_query.awaitTermination()
-print("Auto Loader finished. Checking results...")
-
-# COMMAND ----------
-# Step 3: Verify
-result = spark.table("training.day2.orders_bronze")
-print(f"Rows ingested: {result.count()}")
-result.show()
-
-# COMMAND ----------
-# MAGIC %md ## Cell 9 — Write Modes Demo
-
-# COMMAND ----------
-base_df = spark.createDataFrame([(1, "A"), (2, "B")], ["id", "val"])
-new_df  = spark.createDataFrame([(3, "C"), (4, "D")], ["id", "val"])
-
-# overwrite — replaces ALL existing data
-base_df.write.mode("overwrite").saveAsTable("training.day2.write_demo")
-print("After overwrite:", spark.table("training.day2.write_demo").count(), "rows")
-
-# append — adds to existing data
-new_df.write.mode("append").saveAsTable("training.day2.write_demo")
-print("After append:",   spark.table("training.day2.write_demo").count(), "rows")
-
-# ignore — does nothing if table exists
-new_df.write.mode("ignore").saveAsTable("training.day2.write_demo")
-print("After ignore:",   spark.table("training.day2.write_demo").count(), "rows (unchanged)")
-
-spark.table("training.day2.write_demo").show()
+# Equivalent Spark SQL
+df_sql_result = spark.sql("""
+    SELECT region,
+           ROUND(SUM(amount), 2) AS completed_revenue
+    FROM training.prep.day2_orders
+    WHERE status = 'completed'
+      AND amount IS NOT NULL
+    GROUP BY region
+    ORDER BY completed_revenue DESC
+""")
+df_sql_result.show()
 
 # COMMAND ----------
-# MAGIC %md ## Cell 10 — SQL Exercises
+# MAGIC %md ## 10. Higher-Order Functions (SQL)
 
 # COMMAND ----------
-# MAGIC %sql
-# MAGIC -- Run these in SQL cells to practice
-# MAGIC
-# MAGIC -- Basic SELECT
-# MAGIC SELECT department, COUNT(*) AS headcount, ROUND(AVG(salary), 2) AS avg_salary
-# MAGIC FROM training.day2.employees
-# MAGIC GROUP BY department
-# MAGIC ORDER BY avg_salary DESC;
+spark.sql("""
+SELECT
+    region,
+    COLLECT_LIST(product) AS products,
+    TRANSFORM(COLLECT_LIST(amount), x -> ROUND(x * 1.2, 2)) AS inflated_amounts,
+    FILTER(COLLECT_LIST(status), s -> s = 'completed')      AS completed_statuses,
+    EXISTS(COLLECT_LIST(amount), a -> a > 400)              AS has_big_order
+FROM training.prep.day2_orders
+WHERE amount IS NOT NULL
+GROUP BY region
+""").show(truncate=False)
 
 # COMMAND ----------
-# MAGIC %sql
-# MAGIC -- CTE + Window function
-# MAGIC WITH dept_stats AS (
-# MAGIC   SELECT department, AVG(salary) AS dept_avg
-# MAGIC   FROM training.day2.employees
-# MAGIC   WHERE department IS NOT NULL
-# MAGIC   GROUP BY department
-# MAGIC )
-# MAGIC SELECT
-# MAGIC   e.name,
-# MAGIC   e.department,
-# MAGIC   e.salary,
-# MAGIC   d.dept_avg,
-# MAGIC   RANK() OVER (PARTITION BY e.department ORDER BY e.salary DESC) AS salary_rank
-# MAGIC FROM training.day2.employees e
-# MAGIC JOIN dept_stats d ON e.department = d.department;
+# MAGIC %md ## 11. Cleanup (Optional)
 
 # COMMAND ----------
-# MAGIC %sql
-# MAGIC -- MERGE upsert into Unity Catalog table
-# MAGIC CREATE OR REPLACE TABLE training.day2.employees_updates (
-# MAGIC   id INT, name STRING, department STRING, salary INT, hire_date STRING
-# MAGIC ) USING DELTA;
-# MAGIC
-# MAGIC INSERT INTO training.day2.employees_updates VALUES
-# MAGIC   (1, 'Alice',  'Engineering', 110000, '2020-01-15'),  -- update salary
-# MAGIC   (7, 'Grace',  'Finance',      80000, '2023-05-01');  -- new employee
-# MAGIC
-# MAGIC MERGE INTO training.day2.employees AS t
-# MAGIC USING training.day2.employees_updates AS s
-# MAGIC ON t.id = s.id
-# MAGIC WHEN MATCHED THEN
-# MAGIC   UPDATE SET t.salary = s.salary
-# MAGIC WHEN NOT MATCHED THEN
-# MAGIC   INSERT (id, name, department, salary, hire_date)
-# MAGIC   VALUES (s.id, s.name, s.department, s.salary, s.hire_date);
-# MAGIC
-# MAGIC SELECT * FROM training.day2.employees ORDER BY id;
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## ✅ Day 2 Notebook Complete
-# MAGIC
-# MAGIC **What you practiced:**
-# MAGIC - Creating Unity Catalog managed tables (`training.day2.*`)
-# MAGIC - DataFrame transformations: filter, select, withColumn, groupBy, agg
-# MAGIC - All join types including broadcast join
-# MAGIC - Window functions: rank, row_number, lag
-# MAGIC - Reading/writing CSV and Parquet via Unity Catalog Volumes
-# MAGIC - Auto Loader (`cloudFiles`) ingesting from a Volume into a UC table
-# MAGIC - Write modes: overwrite, append, ignore
-# MAGIC - SQL: CTEs, window functions, MERGE
-# MAGIC
-# MAGIC **Azure-specific patterns used:**
-# MAGIC - Unity Catalog: `training.day2.<table>` — no DBFS, no /tmp/
-# MAGIC - Volumes: `/Volumes/training/day2/files/` — replaces /tmp/ for files
-# MAGIC - `toTable("catalog.schema.table")` for streaming writes
-# MAGIC - Auto Loader with Volume path as source
+# Run only if you want to clean up after this notebook
+# spark.sql("DROP TABLE IF EXISTS training.prep.day2_orders")
+# spark.sql("DROP TABLE IF EXISTS training.prep.day2_orders_partitioned")
+# dbutils.fs.rm("/Volumes/training/prep/landing/day2_json/", recurse=True)
+print("Cleanup skipped — tables preserved for Day 3 reference")
