@@ -1,24 +1,23 @@
 # Day 6 — Practice Tasks: Unity Catalog & Data Governance
+### ☁️ Azure Databricks
 
-> **Environment:** Databricks Community Edition OR a workspace with Unity Catalog enabled.
-> 
-> ⚠️ **Note:** Community Edition may not have Unity Catalog. Many tasks can be run as SQL exercises to understand syntax. Use `SHOW` commands to explore what's available in your workspace.
+> **Environment:** Azure Databricks with Unity Catalog enabled (Standard workspace).
+> All tasks run directly — no simulation or workarounds needed.
 
 ---
 
 ## 🛠️ Setup (10 minutes)
 
 ```sql
--- Check if Unity Catalog is available
+-- Cell 1
+USE CATALOG training;
+USE SCHEMA prep;
+
+SELECT current_catalog(), current_schema(), current_user();
+-- Expected: training | prep | <your email>
+
+-- List available catalogs (you should see 'training' + 'hive_metastore' + 'system')
 SHOW CATALOGS;
--- If you see 'main' catalog → Unity Catalog is available
--- If you only see 'hive_metastore' → using legacy Hive Metastore
-
--- Check your current catalog/schema context
-SELECT current_catalog(), current_schema();
-
--- Check current user
-SELECT current_user();
 ```
 
 ---
@@ -28,345 +27,342 @@ SELECT current_user();
 **Goal:** Understand and use the catalog.schema.table hierarchy.
 
 ```sql
--- === Part A: Explore the namespace ===
-
--- List all catalogs
+-- Part A: Explore the namespace
 SHOW CATALOGS;
+SHOW SCHEMAS IN training;
+SHOW TABLES  IN training.prep;
 
--- List schemas in main catalog
-SHOW SCHEMAS IN main;
-
--- List tables in a schema
-SHOW TABLES IN main.default;
-
--- === Part B: Create a practice catalog/schema/table ===
--- (Skip if no create privileges — just read the syntax)
-
-CREATE CATALOG IF NOT EXISTS training
-COMMENT 'Practice catalog for Day 6 exercises';
+-- Part B: Create a dedicated schema for governance practice
+CREATE SCHEMA IF NOT EXISTS training.governance
+  COMMENT 'Day 6: Unity Catalog governance exercises';
 
 USE CATALOG training;
+USE SCHEMA governance;
 
-CREATE SCHEMA IF NOT EXISTS retail
-COMMENT 'Retail domain tables';
-
-USE SCHEMA retail;
-
--- Create a MANAGED table (UC manages storage)
-CREATE OR REPLACE TABLE training.retail.customers (
-  customer_id STRING NOT NULL,
-  name        STRING,
-  email       STRING,
-  country     STRING,
-  created_at  TIMESTAMP DEFAULT current_timestamp()
-) USING DELTA
-COMMENT 'Customer master data - managed table';
-
--- Insert sample data
-INSERT INTO training.retail.customers VALUES
-  ('C001', 'Alice Müller',   'alice@example.com',  'DE', current_timestamp()),
-  ('C002', 'Bob Schmidt',    'bob@example.com',    'DE', current_timestamp()),
-  ('C003', 'Carol Johnson',  'carol@example.com',  'US', current_timestamp()),
-  ('C004', 'David Li',       'david@example.com',  'CN', current_timestamp()),
-  ('C005', 'Eva Braun',      'eva@example.com',    'DE', current_timestamp());
-
-SELECT * FROM training.retail.customers;
-
--- Create an orders table
-CREATE OR REPLACE TABLE training.retail.orders (
-  order_id    STRING NOT NULL,
-  customer_id STRING,
-  order_date  DATE,
-  amount      DOUBLE,
-  status      STRING
-) USING DELTA
-COMMENT 'Order transactions fact table';
-
-INSERT INTO training.retail.orders VALUES
-  ('ORD001', 'C001', '2024-01-10', 150.00, 'completed'),
-  ('ORD002', 'C002', '2024-01-11', 75.50,  'completed'),
-  ('ORD003', 'C001', '2024-01-12', 320.00, 'pending'),
-  ('ORD004', 'C003', '2024-01-13', 99.99,  'completed'),
-  ('ORD005', 'C004', '2024-01-14', 450.00, 'completed');
-
-SELECT * FROM training.retail.orders;
+SELECT current_catalog(), current_schema();
 ```
 
-**✅ Verify:** Run `DESCRIBE DETAIL training.retail.customers` — what is the `location` field? For managed tables, it should be inside the metastore storage.
+```sql
+-- Part C: Create a practice table
+CREATE OR REPLACE TABLE training.governance.customers (
+  customer_id   BIGINT,
+  name          STRING,
+  email         STRING,
+  phone         STRING,
+  region        STRING,
+  signup_date   DATE,
+  annual_spend  DOUBLE
+) USING DELTA
+COMMENT 'Customer dimension table for governance exercises';
+
+INSERT INTO training.governance.customers VALUES
+  (1, 'Alice Mueller',  'alice@example.com',   '+4989123456', 'EU',   '2022-01-15', 8500.0),
+  (2, 'Bob Smith',     'bob@example.com',     '+12025550181','US',   '2021-06-01', 12000.0),
+  (3, 'Carol Chen',    'carol@example.com',   '+86102345678','APAC', '2023-03-10', 6200.0),
+  (4, 'Dirk Hoffman',  'dirk@example.com',    '+4930987654', 'EU',   '2020-11-20', 18000.0),
+  (5, 'Emma Wilson',   'emma@example.com',    '+447911123456','EU',  '2023-07-05', 4500.0);
+
+SELECT * FROM training.governance.customers;
+```
+
+**What to observe:**
+- In the **Catalog Explorer** (Data tab), navigate to `training.governance.customers`
+- Note the **Owner**, **Created**, **Tags**, and **Lineage** tabs
+- Click **Permissions** — this is where you manage grants
+
+---
+
+## Task 2 — Grants and Privileges (30 min)
+
+**Goal:** Practice GRANT, REVOKE, and SHOW GRANTS.
 
 ```sql
-DESCRIBE DETAIL training.retail.customers;
-DESCRIBE DETAIL training.retail.orders;
+-- View your own current privileges
+SHOW GRANTS ON TABLE training.governance.customers;
+
+-- Grant SELECT to all users in the workspace (account users group)
+GRANT SELECT ON TABLE training.governance.customers
+TO `account users`;
+
+-- Grant USE privileges up the hierarchy (required before table grants take effect)
+GRANT USE CATALOG ON CATALOG training TO `account users`;
+GRANT USE SCHEMA  ON SCHEMA training.governance TO `account users`;
+
+-- Verify grants
+SHOW GRANTS ON TABLE training.governance.customers;
+SHOW GRANTS ON SCHEMA training.governance;
+SHOW GRANTS ON CATALOG training;
+```
+
+```sql
+-- Grant to a specific user (replace with a real user in your workspace if available)
+-- GRANT MODIFY ON TABLE training.governance.customers TO `analyst@yourcompany.com`;
+
+-- Grant ALL PRIVILEGES on schema to a group
+-- GRANT ALL PRIVILEGES ON SCHEMA training.governance TO `data_engineers`;
+
+-- Revoke
+REVOKE SELECT ON TABLE training.governance.customers FROM `account users`;
+
+-- Verify revoke
+SHOW GRANTS ON TABLE training.governance.customers;
+```
+
+**Privilege hierarchy to remember:**
+```
+To access catalog.schema.table, a user needs:
+  GRANT USE CATALOG ON CATALOG <catalog>
+  GRANT USE SCHEMA  ON SCHEMA  <catalog>.<schema>
+  GRANT SELECT      ON TABLE   <catalog>.<schema>.<table>
+
+All three are required. Missing any one → access denied.
 ```
 
 ---
 
-## Task 2 — Managed vs External Tables (15 min)
+## Task 3 — Column Masking (PII Protection) (25 min)
+
+**Goal:** Implement column-level masking to protect PII.
 
 ```sql
--- === Understand DROP behavior ===
+-- Step 1: Create the masking function
+CREATE OR REPLACE FUNCTION training.governance.mask_email(email STRING)
+RETURNS STRING
+RETURN CASE
+  WHEN is_member('pii_readers') THEN email         -- show full email to PII readers
+  WHEN is_account_admin()        THEN email         -- admins always see full data
+  ELSE CONCAT(LEFT(email, 2), '***@***.com')        -- everyone else sees masked
+END;
 
--- Test 1: Create a managed table and drop it
-CREATE TABLE training.retail.temp_managed (id INT, val STRING) USING DELTA;
-INSERT INTO training.retail.temp_managed VALUES (1, 'test');
-SELECT * FROM training.retail.temp_managed;  -- verify data exists
+-- Step 2: Apply mask to the email column
+ALTER TABLE training.governance.customers
+SET MASK training.governance.mask_email ON COLUMN (email);
 
-DROP TABLE training.retail.temp_managed;
--- Result: BOTH the metadata AND data files are deleted
--- You cannot recover the data (no recycle bin)
+-- Step 3: Query — your email may or may not be masked depending on your group membership
+SELECT customer_id, name, email, region FROM training.governance.customers;
+-- If you're an admin: full email shown
+-- If not in pii_readers group: email shown as ab***@***.com
+```
 
--- Test 2: Describe the difference conceptually
--- An EXTERNAL table:
--- CREATE TABLE training.retail.ext_table USING DELTA
--- LOCATION 'abfss://mycontainer@mystorage.dfs.core.windows.net/ext_data/';
--- DROP TABLE → only metadata removed, data files stay at the LOCATION
+```sql
+-- Step 4: Mask phone number too
+CREATE OR REPLACE FUNCTION training.governance.mask_phone(phone STRING)
+RETURNS STRING
+RETURN CASE
+  WHEN is_member('pii_readers') OR is_account_admin() THEN phone
+  ELSE CONCAT('****', RIGHT(phone, 4))
+END;
 
--- Check if a table is managed or external:
-DESCRIBE DETAIL training.retail.customers;
--- Look at 'type' column: 'MANAGED' or 'EXTERNAL'
+ALTER TABLE training.governance.customers
+SET MASK training.governance.mask_phone ON COLUMN (phone);
 
--- Question to answer:
--- Q: You accidentally drop a managed table in production.
---    Can you recover the data? How?
--- A: No direct recovery. You must restore from:
---    1. Delta time travel IF you restore before the DROP (use UNDROP if available in workspace)
---    2. CLONE from backup
---    3. External storage backup
---    UNDROP TABLE is available in Databricks for managed UC tables within the retention period
+-- Query with both masks applied
+SELECT customer_id, name, email, phone FROM training.governance.customers;
 
-SQL -- In some workspaces: UNDROP TABLE training.retail.temp_managed;
+-- Drop mask (to reset for next task)
+ALTER TABLE training.governance.customers DROP MASK ON COLUMN (email);
+ALTER TABLE training.governance.customers DROP MASK ON COLUMN (phone);
 ```
 
 ---
 
-## Task 3 — Volumes (15 min)
+## Task 4 — Row-Level Security (RLS) (25 min)
+
+**Goal:** Restrict rows based on the current user's region access.
 
 ```sql
--- Create a managed volume
-CREATE VOLUME IF NOT EXISTS training.retail.raw_files
-COMMENT 'Landing zone for raw file uploads';
+-- Step 1: Create region access table
+CREATE OR REPLACE TABLE training.governance.region_access (
+  user_email STRING,
+  region     STRING
+) USING DELTA;
 
--- List volumes
-SHOW VOLUMES IN training.retail;
+-- Grant your own user access to EU region
+INSERT INTO training.governance.region_access VALUES
+  (current_user(), 'EU'),
+  ('analyst@example.com', 'US'),
+  ('apac_analyst@example.com', 'APAC');
 
--- The volume path:
--- /Volumes/training/retail/raw_files/
-
--- Write a file to the volume via PySpark:
-```
-
-```python
-# Write a sample CSV to the volume
-import pandas as pd
-
-data = {"order_id": ["A001", "A002"], "amount": [100.0, 200.0]}
-pdf = pd.DataFrame(data)
-spark_df = spark.createDataFrame(pdf)
-
-spark_df.write.mode("overwrite").option("header", True).csv("/Volumes/training/retail/raw_files/sample_orders")
-
-print("Written to volume successfully")
-
-# Read back from the volume
-df_from_volume = spark.read.option("header", True).csv("/Volumes/training/retail/raw_files/sample_orders")
-df_from_volume.show()
+SELECT * FROM training.governance.region_access;
 ```
 
 ```sql
--- Read from volume in SQL
-SELECT * FROM read_files(
-  '/Volumes/training/retail/raw_files/sample_orders',
-  format => 'csv',
-  header => true
+-- Step 2: Create the row filter function
+CREATE OR REPLACE FUNCTION training.governance.customer_region_filter(region STRING)
+RETURNS BOOLEAN
+RETURN (
+  is_account_admin()
+  OR is_member('global_data_readers')
+  OR EXISTS (
+    SELECT 1 FROM training.governance.region_access ra
+    WHERE ra.user_email = current_user()
+      AND ra.region = region
+  )
 );
+
+-- Step 3: Apply the row filter to the table
+ALTER TABLE training.governance.customers
+SET ROW FILTER training.governance.customer_region_filter ON (region);
+
+-- Step 4: Query — you should only see EU rows (unless you're an admin)
+SELECT customer_id, name, region, annual_spend
+FROM training.governance.customers
+ORDER BY customer_id;
+-- If your user is mapped to 'EU': only Alice, Dirk, Emma visible
+-- Admins: all 5 rows visible
+
+-- Remove the row filter
+ALTER TABLE training.governance.customers DROP ROW FILTER;
 ```
 
 ---
 
-## Task 4 — Access Control (25 min)
+## Task 5 — External Locations and Volumes (20 min)
 
 ```sql
--- === Grants and Revokes ===
+-- List existing external locations (set up by workspace admin)
+SHOW EXTERNAL LOCATIONS;
 
--- Add documentation and tags
-COMMENT ON TABLE training.retail.orders IS 'All order transactions. Source: ERP system.';
-COMMENT ON COLUMN training.retail.orders.amount IS 'Order value in EUR. Never negative.';
+-- List storage credentials
+SHOW STORAGE CREDENTIALS;
 
-ALTER TABLE training.retail.orders
-SET TAGS ('domain' = 'retail', 'tier' = 'silver', 'pii' = 'false');
+-- Create a volume (managed — no external storage needed)
+CREATE VOLUME IF NOT EXISTS training.governance.files
+  COMMENT 'File storage for governance exercises';
 
-ALTER TABLE training.retail.customers
-SET TAGS ('domain' = 'retail', 'tier' = 'silver', 'pii' = 'true');
-
--- View tags
-DESCRIBE EXTENDED training.retail.orders;
-
--- === Practice GRANT syntax (read-only if you don't have admin) ===
-
--- Grant SELECT on a table to a user
--- GRANT SELECT ON TABLE training.retail.orders TO `analyst@company.com`;
-
--- Grant SELECT on whole schema
--- GRANT SELECT ON SCHEMA training.retail TO `data_analysts`;
-
--- Grant USE permissions (required before any access)
--- GRANT USE CATALOG ON CATALOG training TO `data_analysts`;
--- GRANT USE SCHEMA ON SCHEMA training.retail TO `data_analysts`;
-
--- View what grants exist on a table
-SHOW GRANTS ON TABLE training.retail.customers;
-SHOW GRANTS ON TABLE training.retail.orders;
-
--- Show all grants your current user has
--- SHOW GRANTS TO `current_user@company.com`;
-```
-
-**Exercise — Answer these:**
-```sql
--- Q1: A user wants to run SELECT * FROM training.retail.orders
---     What minimum set of privileges are needed?
--- A1: USE CATALOG on 'training', USE SCHEMA on 'training.retail', SELECT on the table
-
--- Q2: If you GRANT SELECT ON SCHEMA training.retail TO analyst_group
---     Can they create new tables in that schema? Why/why not?
--- A2: No. SELECT only allows reading. CREATE TABLE requires separate CREATE TABLE privilege.
-
--- Q3: What happens when you DROP a managed table in Unity Catalog?
--- A3: Both metadata AND data files are deleted permanently (use UNDROP within retention period)
-SELECT 'Access control answers verified' AS status;
-```
-
----
-
-## Task 5 — Delta Sharing Concepts (15 min)
-
-```sql
--- These commands require metastore admin or share provider privileges
--- Practice the syntax even if you can't execute in your environment
-
--- === Provider side ===
-
--- Create a share
--- CREATE SHARE retail_data_share
--- COMMENT 'Share retail order summaries with external partners';
-
--- Add a table to the share
--- ALTER SHARE retail_data_share
--- ADD TABLE training.retail.orders
--- COMMENT 'Order data without PII';
-
--- Add a partition to limit what's shared
--- ALTER SHARE retail_data_share
--- ADD TABLE training.retail.orders
--- PARTITION (country = 'DE');  -- Only share German orders
-
--- Create a recipient
--- CREATE RECIPIENT partner_acme;
-
--- Grant the recipient access
--- GRANT SELECT ON SHARE retail_data_share TO RECIPIENT partner_acme;
-
--- View shares
--- SHOW SHARES;
--- DESCRIBE SHARE retail_data_share;
-
--- === Key facts to memorize ===
-SELECT
-  'No data copying - recipient reads provider storage directly' AS fact_1,
-  'Open protocol - works across clouds (AWS, Azure, GCP)' AS fact_2,
-  'Shares contain tables, views, or schemas' AS fact_3,
-  'Recipients get activation link to configure their client' AS fact_4;
-```
-
----
-
-## Task 6 — Knowledge Check Quiz (15 min)
-
-```sql
--- Answer in SQL comments or in a notebook markdown cell
-
--- Q1. You run: DROP TABLE main.retail.transactions
---     This table was created with:
---     CREATE TABLE main.retail.transactions USING DELTA
---     LOCATION 'abfss://data@storage.dfs.core.windows.net/transactions'
---     What happens to the data files in ADLS?
--- A1: ____________
-
--- Q2. What is the correct 3-level path to access a volume file?
--- A2: ____________
-
--- Q3. A user belongs to group 'analysts' which has GRANT SELECT ON SCHEMA main.retail.
---     Can this user run INSERT INTO main.retail.orders ... ?
--- A3: ____________
-
--- Q4. What Unity Catalog feature automatically tracks which tables
---     fed data into another table without any setup?
--- A4: ____________
-
--- Q5. In Delta Sharing, the recipient runs:
---     spark.read.format('deltaSharing').load(...)
---     Are the data files copied to the recipient's storage?
--- A5: ____________
+-- List volumes in schema
+SHOW VOLUMES IN training.governance;
 ```
 
 ```python
-# Answers
-print("""
-Q1: Data files are NOT deleted (external table). Only the metadata entry is removed.
-Q2: /Volumes/{catalog}/{schema}/{volume}/{optional_path}/filename.ext
-Q3: No. SELECT privilege does not grant INSERT/MODIFY rights.
-Q4: Data Lineage (automatic in Unity Catalog)
-Q5: No. Recipient reads directly from provider's storage. No data copying.
-""")
+# Write a file to the volume
+dbutils.fs.put(
+    "/Volumes/training/governance/files/test.txt",
+    "Hello from Unity Catalog Volume!",
+    overwrite=True
+)
+
+# Read it back
+content = dbutils.fs.head("/Volumes/training/governance/files/test.txt")
+print(content)
+# Output: Hello from Unity Catalog Volume!
+
+# List volume contents
+display(dbutils.fs.ls("/Volumes/training/governance/files/"))
+```
+
+```sql
+-- External location example (read-only — admin must have set this up)
+-- CREATE EXTERNAL LOCATION my_adls_location
+-- URL 'abfss://container@mystorage.dfs.core.windows.net/data/'
+-- WITH (STORAGE CREDENTIAL my_storage_credential)
+-- COMMENT 'ADLS Gen2 external location for raw data';
+
+-- Create an external table (data stored outside UC, managed externally)
+-- CREATE TABLE training.governance.external_sales
+-- LOCATION 'abfss://container@mystorage.dfs.core.windows.net/data/sales/'
+-- COMMENT 'External Delta table on ADLS Gen2';
+```
+
+**Managed vs External Tables:**
+| | Managed Table | External Table |
+|---|---|---|
+| **Storage** | UC-managed ADLS (automatic) | Your ADLS path (you control) |
+| **DROP TABLE** | Deletes data | Deletes metadata only |
+| **LOCATION clause** | Not needed | Required |
+| **Best for** | Most use cases | Sharing data with non-Databricks tools |
+
+---
+
+## Task 6 — Data Lineage (15 min)
+
+```sql
+-- Create a lineage chain: raw → cleaned → aggregated
+CREATE OR REPLACE TABLE training.governance.raw_transactions AS
+SELECT
+  customer_id,
+  annual_spend AS transaction_amount,
+  signup_date  AS transaction_date
+FROM training.governance.customers;
+
+CREATE OR REPLACE TABLE training.governance.clean_transactions AS
+SELECT
+  customer_id,
+  transaction_amount,
+  transaction_date,
+  YEAR(transaction_date) AS transaction_year
+FROM training.governance.raw_transactions
+WHERE transaction_amount > 0;
+
+CREATE OR REPLACE TABLE training.governance.customer_ytd AS
+SELECT
+  customer_id,
+  SUM(transaction_amount) AS ytd_spend
+FROM training.governance.clean_transactions
+GROUP BY customer_id;
+
+-- Now go to Catalog Explorer → training.governance.customer_ytd
+-- Click the 'Lineage' tab to see the data flow graph
+-- You should see: customers → raw_transactions → clean_transactions → customer_ytd
 ```
 
 ---
 
-## Task 7 — System Tables Exploration (10 min)
+## Task 7 — Tags and Documentation (10 min)
 
 ```sql
--- Unity Catalog System Tables (available in workspaces with UC)
+-- Add tags to a table (helps with data discovery and governance)
+ALTER TABLE training.governance.customers
+SET TAGS ('pii' = 'true', 'domain' = 'customer', 'owner' = 'data-team');
 
--- Browse available system schemas
-SHOW SCHEMAS IN system;
+-- Add tags to a column
+ALTER TABLE training.governance.customers
+ALTER COLUMN email SET TAGS ('pii' = 'true', 'sensitivity' = 'high');
 
--- Information schema: table metadata
-SELECT table_catalog, table_schema, table_name, table_type, created
-FROM system.information_schema.tables
-WHERE table_catalog = 'training'
-ORDER BY created DESC
+-- View tags in Catalog Explorer → Tags tab
+-- Or query via system tables:
+SELECT * FROM system.information_schema.table_tags
+WHERE catalog_name = 'training' AND schema_name = 'governance';
+```
+
+---
+
+## Task 8 — System Tables & Audit (15 min)
+
+```sql
+-- Unity Catalog system tables (available in Azure Databricks)
+-- Query audit logs, lineage, and billing
+
+-- Table access history (requires system catalog access)
+SELECT *
+FROM system.access.audit
+WHERE service_name = 'unityCatalog'
+  AND action_name IN ('getTable', 'createTable', 'deleteTable')
+  AND DATE(event_date) = CURRENT_DATE()
 LIMIT 20;
 
--- Column metadata
-SELECT table_name, column_name, data_type, is_nullable
-FROM system.information_schema.columns
-WHERE table_catalog = 'training' AND table_schema = 'retail'
-ORDER BY table_name, ordinal_position;
+-- Column lineage
+SELECT *
+FROM system.lineage.column_lineage
+WHERE target_table_full_name = 'training.governance.customer_ytd'
+LIMIT 20;
 
--- Access audit logs (if system.access is available)
--- SELECT event_time, user_identity.email, action_name, request_params
--- FROM system.access.audit
--- WHERE event_date = current_date()
--- ORDER BY event_time DESC
--- LIMIT 50;
+-- Table lineage
+SELECT *
+FROM system.lineage.table_lineage
+WHERE target_table_full_name LIKE 'training.governance.%'
+LIMIT 20;
 ```
 
 ---
 
 ## ✅ Day 6 Completion Checklist
 
-- [ ] Know the 3-level namespace: catalog.schema.table
-- [ ] Understand managed vs external table DROP behavior
-- [ ] Know volume path format: `/Volumes/{catalog}/{schema}/{volume}/`
-- [ ] Can write GRANT/REVOKE statements
-- [ ] Know that `USE CATALOG` + `USE SCHEMA` are prerequisites for table access
-- [ ] Understand row filters and column masks concept
-- [ ] Know that data lineage is automatic in Unity Catalog
-- [ ] Understand Delta Sharing (no data copy, open protocol)
-- [ ] Know Lakehouse Federation purpose (query external DBs directly)
-- [ ] Completed Tasks 1-7
-
-## 🔗 Additional Practice
-- [Unity Catalog Tutorial](https://docs.databricks.com/data-governance/unity-catalog/get-started.html)
-- [Privileges Reference](https://docs.databricks.com/data-governance/unity-catalog/manage-privileges/privileges.html)
-- [CertSafari Unity Catalog Questions](https://www.certsafari.com/databricks/data-engineer-associate)
+- [ ] Three-level namespace navigated (catalogs, schemas, tables shown)
+- [ ] `training.governance.customers` created with 5 rows
+- [ ] GRANT + REVOKE executed; verified with SHOW GRANTS
+- [ ] Column mask on `email` applied and tested
+- [ ] Row filter on `region` applied and tested (EU rows only visible)
+- [ ] Volume created and file written/read via `/Volumes/`
+- [ ] Lineage chain created (3 tables); lineage graph viewed in Catalog Explorer
+- [ ] Table tags added to `customers` table
