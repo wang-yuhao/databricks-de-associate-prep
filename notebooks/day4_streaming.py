@@ -1,335 +1,226 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Day 4 — Structured Streaming on Azure Databricks
+# MAGIC # Day 4 — Structured Streaming
+# MAGIC ### ☁️ Azure Databricks Edition
 # MAGIC
-# MAGIC **Environment:** Azure Databricks (Unity Catalog enabled)  
-# MAGIC **Cluster:** Single Node, DBR 15.x LTS, `Standard_DS3_v2`  
-# MAGIC **Estimated time:** 3–4 hours
+# MAGIC **Catalog / Schema:** `training.prep`
+# MAGIC **Checkpoints:** `/Volumes/training/prep/landing/checkpoints/<query>/`
+# MAGIC **Source files:** `/Volumes/training/prep/landing/stream_events/`
 # MAGIC
-# MAGIC ## What you will practice:
-# MAGIC - Structured Streaming: readStream / writeStream fundamentals
-# MAGIC - Trigger types: AvailableNow, ProcessingTime, Continuous
-# MAGIC - Output modes: append, complete, update
-# MAGIC - Windowed aggregations with watermarking
-# MAGIC - Streaming checkpoints (stored in Unity Catalog Volumes)
-# MAGIC - Streaming to/from Delta tables (Unity Catalog)
-# MAGIC
-# MAGIC ## Azure Note on Checkpoints
-# MAGIC Checkpoint locations must be a persistent path. On Azure Databricks use:
-# MAGIC - **Unity Catalog Volumes**: `/Volumes/<catalog>/<schema>/<volume>/checkpoints/` ✔️
-# MAGIC - **ADLS Gen2** (abfss://): `abfss://<container>@<storage>.dfs.core.windows.net/checkpoints/` ✔️
-# MAGIC - `/tmp/` is NOT persistent across cluster restarts — avoid for streaming checkpoints
+# MAGIC All streaming sinks write to Unity Catalog managed Delta tables.
+# MAGIC Never use `/tmp/` for checkpoints — use Volumes instead.
 
 # COMMAND ----------
-# MAGIC %md ## Setup
+spark.sql("USE CATALOG training")
+spark.sql("USE SCHEMA prep")
+print(spark.sql("SELECT current_catalog(), current_schema(), current_user()").collect()[0])
 
 # COMMAND ----------
-# MAGIC %sql
-# MAGIC CREATE CATALOG IF NOT EXISTS training;
-# MAGIC CREATE SCHEMA  IF NOT EXISTS training.day4
-# MAGIC   COMMENT 'Day 4: Structured Streaming exercises';
-# MAGIC
-# MAGIC -- Volume for checkpoint storage (replaces /tmp/ paths)
-# MAGIC CREATE VOLUME IF NOT EXISTS training.day4.checkpoints
-# MAGIC   COMMENT 'Streaming checkpoint storage for Day 4 exercises';
-# MAGIC
-# MAGIC CREATE VOLUME IF NOT EXISTS training.day4.files
-# MAGIC   COMMENT 'Landing files for streaming source exercises';
-# MAGIC
-# MAGIC USE CATALOG training;
-# MAGIC USE SCHEMA day4;
-# MAGIC SELECT current_catalog(), current_schema();
+# MAGIC %md ## 1. Basic Stream: Delta Table → Delta Table
 
 # COMMAND ----------
-# Define reusable path constants
-CHECKPOINT_BASE = "/Volumes/training/day4/checkpoints"
-FILES_BASE      = "/Volumes/training/day4/files"
-print(f"Checkpoint base: {CHECKPOINT_BASE}")
-print(f"Files base:      {FILES_BASE}")
-
-# COMMAND ----------
-# MAGIC %md ## Task 1 — Basic Streaming Read + Write (Delta → Delta)
-
-# COMMAND ----------
-# Step 1: Create and populate a source Delta table
-from pyspark.sql.functions import current_timestamp, col
+from pyspark.sql.functions import current_timestamp
 import random
 
+# Create source Delta table
 random.seed(42)
-event_types = ["click", "view", "purchase"]
-
-data = [
-    (i, f"user_{i % 10}", random.choice(event_types), round(i * 1.5, 2))
-    for i in range(1, 101)
-]
-
-source_df = spark.createDataFrame(data, ["event_id", "user_id", "event_type", "value"])
-source_df = source_df.withColumn("event_time", current_timestamp())
-
-# Save as a Unity Catalog managed Delta table
-source_df.write.mode("overwrite").saveAsTable("training.day4.events_source")
-print(f"Source table created: training.day4.events_source ({source_df.count()} rows)")
+data = [(i, f"user_{i%10}", random.choice(["click","view","purchase"]), float(i*1.5))
+        for i in range(1, 101)]
+df_src = spark.createDataFrame(data, ["event_id","user_id","event_type","value"])
+df_src = df_src.withColumn("event_time", current_timestamp())
+df_src.write.mode("overwrite").saveAsTable("training.prep.d4_stream_source")
+print("Source rows:", spark.table("training.prep.d4_stream_source").count())
 
 # COMMAND ----------
-# Step 2: Read the source as a stream
-source_stream = (
+# Stream source Delta → sink Delta  (availableNow = process all, then stop)
+CHK1 = "/Volumes/training/prep/landing/checkpoints/d4_basic_stream"
+
+q1 = (
     spark.readStream
     .format("delta")
-    .table("training.day4.events_source")
-)
-
-print("Is streaming:", source_stream.isStreaming)
-print("Schema:")
-source_stream.printSchema()
-
-# COMMAND ----------
-# Step 3: Write stream to a sink Delta table
-# - Checkpoint stored in Unity Catalog Volume (persistent, survives cluster restarts)
-query1 = (
-    source_stream
+    .table("training.prep.d4_stream_source")
     .writeStream
     .format("delta")
     .outputMode("append")
-    .option("checkpointLocation", f"{CHECKPOINT_BASE}/task1")
-    .trigger(availableNow=True)   # process all available data, then stop
-    .toTable("training.day4.events_sink")  # UC managed table
+    .option("checkpointLocation", CHK1)
+    .trigger(availableNow=True)      # preferred over trigger(once=True)
+    .toTable("training.prep.d4_stream_sink")
 )
-
-query1.awaitTermination()
-print("Stream finished.")
-
-# COMMAND ----------
-# Step 4: Verify
-sink_df = spark.table("training.day4.events_sink")
-print(f"Sink row count: {sink_df.count()} (expected: 100)")
-sink_df.show(5)
+q1.awaitTermination()
+print("Sink rows after run 1:", spark.table("training.prep.d4_stream_sink").count())  # 100
 
 # COMMAND ----------
-# MAGIC %md ## Task 2 — Trigger Types Comparison
+# Append 10 more rows to source; only those are processed on second run
+new_data = [(i, f"user_{i%10}", "click", float(i*2.0)) for i in range(101, 111)]
+df_new = spark.createDataFrame(new_data, ["event_id","user_id","event_type","value"])
+df_new = df_new.withColumn("event_time", current_timestamp())
+df_new.write.mode("append").saveAsTable("training.prep.d4_stream_source")
 
-# COMMAND ----------
-# Clear previous checkpoint so we can rerun with different triggers
-dbutils.fs.rm(f"{CHECKPOINT_BASE}/task2_processingtime", recurse=True)
-
-# ProcessingTime trigger — runs micro-batch every N seconds
-query2 = (
-    spark.readStream
-    .format("delta")
-    .table("training.day4.events_source")
-    .writeStream
-    .format("delta")
-    .outputMode("append")
-    .option("checkpointLocation", f"{CHECKPOINT_BASE}/task2_processingtime")
-    .trigger(processingTime="5 seconds")  # micro-batch every 5 seconds
-    .toTable("training.day4.events_sink_pt")
+q2 = (
+    spark.readStream.format("delta").table("training.prep.d4_stream_source")
+    .writeStream.format("delta")
+    .option("checkpointLocation", CHK1)  # same checkpoint → resumes from last offset
+    .trigger(availableNow=True)
+    .toTable("training.prep.d4_stream_sink")
 )
-
-import time
-time.sleep(12)   # let it run 2–3 batches
-query2.stop()
-print("ProcessingTime query stopped.")
-print(f"Rows in sink: {spark.table('training.day4.events_sink_pt').count()}")
+q2.awaitTermination()
+print("Sink rows after run 2:", spark.table("training.prep.d4_stream_sink").count())  # 110
+# Note: exactly 110, no duplicates — checkpoint ensures exactly-once
 
 # COMMAND ----------
-# Trigger type summary:
-print("""
-Trigger Types on Azure Databricks:
-
-  availableNow=True     → Process all pending data in one or more micro-batches, then stop.
-                           Best for batch-style jobs scheduled by Lakeflow/Workflows.
-
-  processingTime='Ns'   → Continuous micro-batches every N seconds.
-                           Good for near-real-time with low overhead.
-
-  once=True             → DEPRECATED. Use availableNow=True instead.
-
-  continuous='500ms'    → True continuous processing (low-latency, experimental).
-                           Requires a persistent cluster; not for Workflows.
-""")
+# MAGIC %md ## 2. Windowed Aggregation with Watermark
 
 # COMMAND ----------
-# MAGIC %md ## Task 3 — Windowed Aggregation with Watermarking
-
-# COMMAND ----------
-from pyspark.sql.functions import window, count, sum as spark_sum
-from pyspark.sql.types import *
 import datetime
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, TimestampType
 
-# Create timestamped source data
-rows = []
-base_time = datetime.datetime(2024, 1, 1, 10, 0, 0)
-for i in range(300):
-    ts = base_time + datetime.timedelta(seconds=i * 20)
-    rows.append((i, f"user_{i % 5}", "click", float(i % 50 + 1), ts))
+# Create timestamp-rich source
+rows, base = [], datetime.datetime(2024, 1, 1, 10, 0, 0)
+for i in range(200):
+    rows.append((i, f"user_{i%5}", "click", float(i), base + datetime.timedelta(seconds=i*30)))
 
-schema_ts = StructType([
+schema = StructType([
     StructField("id",         IntegerType()),
     StructField("user_id",    StringType()),
     StructField("event",      StringType()),
     StructField("amount",     DoubleType()),
     StructField("event_time", TimestampType()),
 ])
-
-df_ts = spark.createDataFrame(rows, schema_ts)
-df_ts.write.mode("overwrite").saveAsTable("training.day4.events_with_ts")
-print(f"Created training.day4.events_with_ts: {df_ts.count()} rows")
+spark.createDataFrame(rows, schema).write.mode("overwrite").saveAsTable("training.prep.d4_stream_source_ts")
+print("Timestamp source rows:", spark.table("training.prep.d4_stream_source_ts").count())
 
 # COMMAND ----------
-# Windowed aggregation stream
-dbutils.fs.rm(f"{CHECKPOINT_BASE}/task3_windowed", recurse=True)
+from pyspark.sql.functions import window, col, count, sum as spark_sum
 
-stream_ts = (
-    spark.readStream
-    .format("delta")
-    .table("training.day4.events_with_ts")
-)
+CHK2 = "/Volumes/training/prep/landing/checkpoints/d4_windowed_agg"
 
-agg_stream = (
-    stream_ts
-    .withWatermark("event_time", "10 minutes")  # drop late data older than 10 min
+q3 = (
+    spark.readStream.format("delta").table("training.prep.d4_stream_source_ts")
+    .withWatermark("event_time", "10 minutes")      # tolerate up to 10 min late data
     .groupBy(
-        window(col("event_time"), "5 minutes"),  # 5-min tumbling windows
+        window(col("event_time"), "5 minutes"),     # 5-min tumbling window
         col("user_id")
     )
     .agg(
         count("*").alias("event_count"),
         spark_sum("amount").alias("total_amount"),
     )
-)
-
-query3 = (
-    agg_stream
     .writeStream
     .format("delta")
-    .outputMode("append")  # use append with watermark (complete requires full re-agg)
-    .option("checkpointLocation", f"{CHECKPOINT_BASE}/task3_windowed")
+    .outputMode("append")                           # append required with watermark
+    .option("checkpointLocation", CHK2)
     .trigger(availableNow=True)
-    .toTable("training.day4.windowed_agg")
+    .toTable("training.prep.d4_windowed_agg")
 )
+q3.awaitTermination()
 
-query3.awaitTermination()
-print("Windowed aggregation complete.")
-
-# COMMAND ----------
-result3 = spark.table("training.day4.windowed_agg")
-print(f"Aggregated rows: {result3.count()}")
-result3.orderBy("window.start", "user_id").show(20, truncate=False)
+result = spark.table("training.prep.d4_windowed_agg")
+print("Window rows:", result.count())
+result.orderBy("window.start", "user_id").show(10, truncate=False)
 
 # COMMAND ----------
-# MAGIC %md ## Task 4 — Streaming Metrics and Monitoring
+# MAGIC %md ## 3. Trigger Types Reference
 
 # COMMAND ----------
-# Start a ProcessingTime query and inspect its status/metrics
-dbutils.fs.rm(f"{CHECKPOINT_BASE}/task4_monitor", recurse=True)
+print("""
+Trigger                         | Code                                     | Behaviour
+--------------------------------|------------------------------------------|-------------------------------------------
+availableNow (preferred)        | trigger(availableNow=True)               | Process all current data, stop. No duplicates.
+processingTime (continuous run) | trigger(processingTime='30 seconds')     | New micro-batch every 30 s. Runs indefinitely.
+once (DEPRECATED)               | trigger(once=True)                       | Deprecated in DBR 10.1. Use availableNow.
+continuous (low latency)        | trigger(continuous='1 second')           | Sub-ms latency; limited operations supported.
 
-monitor_query = (
-    spark.readStream
-    .format("delta")
-    .table("training.day4.events_source")
-    .writeStream
-    .format("delta")
-    .outputMode("append")
-    .option("checkpointLocation", f"{CHECKPOINT_BASE}/task4_monitor")
-    .trigger(processingTime="10 seconds")
-    .toTable("training.day4.events_monitor_sink")
-)
-
-import time
-time.sleep(15)
-
-# Inspect query status
-print("Query status:",  monitor_query.status)
-print("Last progress:", monitor_query.lastProgress)
-print("Is active:",     monitor_query.isActive)
-
-monitor_query.stop()
-print("Query stopped.")
+Rule: availableNow replaces once. Use processingTime for true streaming pipelines.
+""")
 
 # COMMAND ----------
-# MAGIC %md ## Task 5 — Auto Loader as a Streaming Source (with Volume)
+# MAGIC %md ## 4. Auto Loader (cloudFiles) — File Ingestion from Volume
 
 # COMMAND ----------
-# Auto Loader on Azure Databricks — reads files from a Volume directory incrementally
 import json
 
-# Write sample JSON files to the volume (simulating files landing from an upstream process)
-for batch_num in range(1, 4):
-    batch_data = [
-        {"order_id": f"B{batch_num}_{i:03d}", "amount": float(batch_num * 100 + i), "status": "completed"}
-        for i in range(1, 6)
-    ]
-    batch_df = spark.createDataFrame(batch_data)
-    batch_df.write.mode("overwrite").json(f"{FILES_BASE}/orders_landing/batch{batch_num}")
-
-print("Written 3 batches of JSON files to volume")
-dbutils.fs.ls(f"{FILES_BASE}/orders_landing")
+# Simulate files landing in a Volume folder
+batch1 = [{"event_id": f"E{i:04d}", "user": f"user_{i%20}", "type": "purchase", "amount": i*5.0}
+          for i in range(1, 21)]
+for i, ev in enumerate(batch1):
+    dbutils.fs.put(
+        f"/Volumes/training/prep/landing/stream_events/ev_{i:04d}.json",
+        json.dumps(ev), overwrite=True
+    )
+print("Batch 1 files written:", len(batch1))
 
 # COMMAND ----------
-# Auto Loader streaming read from the Volume
-dbutils.fs.rm(f"{CHECKPOINT_BASE}/task5_autoloader", recurse=True)
+CHK_AL = "/Volumes/training/prep/landing/checkpoints/d4_autoloader"
 
-auto_loader_stream = (
+# Auto Loader — incrementally ingest new files without duplicates
+q4 = (
     spark.readStream
     .format("cloudFiles")
     .option("cloudFiles.format", "json")
     .option("cloudFiles.inferColumnTypes", "true")
-    .option("cloudFiles.schemaLocation", f"{CHECKPOINT_BASE}/task5_schema")
-    .load(f"{FILES_BASE}/orders_landing/")  # Volume path
-)
-
-query5 = (
-    auto_loader_stream
+    .option("cloudFiles.schemaLocation", CHK_AL + "/schema")
+    .load("/Volumes/training/prep/landing/stream_events/")
     .writeStream
     .format("delta")
+    .option("checkpointLocation", CHK_AL + "/data")
     .outputMode("append")
-    .option("checkpointLocation", f"{CHECKPOINT_BASE}/task5_autoloader")
     .trigger(availableNow=True)
-    .toTable("training.day4.orders_autoloader")
+    .toTable("training.prep.d4_bronze_events")
 )
-
-query5.awaitTermination()
-result5 = spark.table("training.day4.orders_autoloader")
-print(f"Auto Loader ingested {result5.count()} rows")
-result5.show()
+q4.awaitTermination()
+print("After batch 1:", spark.table("training.prep.d4_bronze_events").count())  # 20
 
 # COMMAND ----------
-# MAGIC %md ## Task 6 — Output Modes Summary
+# Add batch 2 — Auto Loader only ingests NEW files
+batch2 = [{"event_id": f"E{i:04d}", "user": f"user_{i%20}", "type": "view", "amount": i*2.0}
+          for i in range(21, 31)]
+for i, ev in enumerate(batch2):
+    dbutils.fs.put(
+        f"/Volumes/training/prep/landing/stream_events/new_ev_{i:04d}.json",
+        json.dumps(ev), overwrite=True
+    )
+
+q5 = (
+    spark.readStream.format("cloudFiles")
+    .option("cloudFiles.format", "json")
+    .option("cloudFiles.inferColumnTypes", "true")
+    .option("cloudFiles.schemaLocation", CHK_AL + "/schema")
+    .load("/Volumes/training/prep/landing/stream_events/")
+    .writeStream.format("delta")
+    .option("checkpointLocation", CHK_AL + "/data")  # same checkpoint = resume
+    .trigger(availableNow=True)
+    .toTable("training.prep.d4_bronze_events")
+)
+q5.awaitTermination()
+print("After batch 2:", spark.table("training.prep.d4_bronze_events").count())  # 30, no duplicates
 
 # COMMAND ----------
+# MAGIC %md ## 5. Checkpoint Deep Dive
+
+# COMMAND ----------
+# Inspect checkpoint directory structure
+display(dbutils.fs.ls(CHK1))
+# You should see: commits/, offsets/, metadata
+# commits/ → which micro-batches have been written to sink
+# offsets/ → which Delta version was last read from source
+
 print("""
-Streaming Output Modes:
-
-  append    → Only new rows added since last trigger are output.
-               Works with: simple transforms, watermarked aggregations.
-               Most common mode for Delta sink.
-
-  complete  → Entire result table is output every trigger.
-               Only works with aggregations (no watermark needed).
-               Expensive for large result sets.
-
-  update    → Only rows that changed since last trigger are output.
-               Works with aggregations and foreachBatch.
-               NOT supported by Delta Lake sink directly.
-
-On Azure Databricks with Delta Lake sink:
-  - Use 'append' with watermarked aggregations (most common)
-  - Use 'complete' only for small aggregations (full rescan each batch)
+Checkpoint Rules (critical for exam):
+1. Every streaming query MUST have a unique checkpointLocation
+2. Never share a checkpoint between two different queries
+3. Changing the checkpointLocation = fresh start (reprocesses all data)
+4. Deleting the checkpoint = reprocesses from the beginning
+5. Always store in /Volumes/ (durable) — never /tmp/ (ephemeral)
 """)
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## ✅ Day 4 Notebook Complete
-# MAGIC
-# MAGIC **What you practiced:**
-# MAGIC - `readStream` from Delta table → `writeStream` to Delta table (Unity Catalog)
-# MAGIC - Trigger types: `availableNow`, `processingTime`, `continuous`
-# MAGIC - Windowed aggregation with `withWatermark` + `window()`
-# MAGIC - Query monitoring: `.status`, `.lastProgress`, `.isActive`
-# MAGIC - Auto Loader (`cloudFiles`) from a Unity Catalog Volume
-# MAGIC - Output modes: append, complete, update
-# MAGIC
-# MAGIC **Azure-specific patterns:**
-# MAGIC - Checkpoints in `/Volumes/training/day4/checkpoints/` (persistent across restarts)
-# MAGIC - `toTable("catalog.schema.table")` for UC-managed streaming sinks
-# MAGIC - No `/tmp/` paths (not persistent on Azure Databricks)
-# MAGIC - Auto Loader reads from Volume path (no cloud event config needed for labs)
+# MAGIC %md ## 6. Cleanup (Optional)
+
+# COMMAND ----------
+# Uncomment to clean up after this notebook
+# for tbl in ["d4_stream_source","d4_stream_sink","d4_stream_source_ts",
+#             "d4_windowed_agg","d4_bronze_events"]:
+#     spark.sql(f"DROP TABLE IF EXISTS training.prep.{tbl}")
+# dbutils.fs.rm("/Volumes/training/prep/landing/checkpoints/d4_", recurse=True)
+# dbutils.fs.rm("/Volumes/training/prep/landing/stream_events/", recurse=True)
+print("Cleanup skipped — tables preserved for reference")
