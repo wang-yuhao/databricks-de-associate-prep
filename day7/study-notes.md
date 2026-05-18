@@ -386,3 +386,189 @@ ALTER TABLE users ALTER COLUMN email SET MASK mask_email;
 - **Elimination strategy:** on 4-option MCQ, eliminate 2 wrong answers first, then choose between remaining
 - **SQL > Python:** When both SQL and PySpark options look correct, prefer the SQL answer for Databricks context
 - **"Best practice" questions:** Databricks recommends Unity Catalog, Workflows, DLT, Auto Loader — favor these over legacy alternatives
+
+
+---
+
+## 💼 Professional Interview Preparation
+
+This section prepares you for **real Databricks Data Engineering interview questions** at companies like Siemens, Deutsche Bank, Deka, SAP, and other German/EU tech firms. Study this alongside the exam prep.
+
+---
+
+### Behavioral / Architecture Questions
+
+**Q1: "Explain the Medallion Architecture and how you would implement it in a real project."**
+
+> **Answer framework:**
+> - Bronze: append-only raw ingestion with Auto Loader, preserve `_source_file` and `_ingest_timestamp`
+> - Silver: MERGE-based incremental upserts, type casting, null filtering, deduplication
+> - Gold: aggregated/joined tables optimized with OPTIMIZE + ZORDER for BI queries
+> - Mention: DLT pipelines automate this pattern declaratively; CDF enables incremental Silver loads
+> - Real example: "In my Siemens project, I ingested Kafka events into Bronze via Structured Streaming, applied MERGE in Silver with foreachBatch, and refreshed Gold with daily job clusters."
+
+---
+
+**Q2: "What is Spark shuffle and how do you optimize it?"**
+
+> **Answer framework:**
+> - Shuffle = redistribution of data across partitions over the network; triggered by `groupBy`, `join`, `distinct`, `orderBy`
+> - Expensive because: disk spill, network I/O, serialization
+> - Optimizations:
+>   1. `spark.sql.shuffle.partitions` — tune from default 200 based on data volume
+>   2. Broadcast joins — for small tables, avoids shuffle entirely
+>   3. AQE (Adaptive Query Execution) — auto-coalesces partitions, switches to broadcast, handles skew
+>   4. Partition the input data by join key — reduces shuffle at read time
+>   5. Liquid Clustering — colocates data for repeated filter patterns
+
+---
+
+**Q3: "What's the difference between repartition() and coalesce()?"**
+
+> **Answer:**
+> - `repartition(n)`: performs a full shuffle to create exactly N evenly-sized partitions. Can increase or decrease count. Use when you need balanced partitions.
+> - `coalesce(n)`: merges partitions without shuffle. Can only decrease count. Potentially uneven. Use after a filter to reduce output files efficiently.
+> - Pattern: `df.filter(...).coalesce(10).write...` avoids a shuffle when writing filtered results.
+
+---
+
+**Q4: "How does Delta Lake ensure ACID transactions?"**
+
+> **Answer:**
+> - **Atomicity**: writes are staged and committed atomically via `_delta_log/` JSON entries; either all files are committed or none
+> - **Consistency**: schema enforcement rejects writes that don't match table schema
+> - **Isolation**: optimistic concurrency control — readers see a consistent snapshot; conflicts detected at commit time
+> - **Durability**: transaction log is written to cloud object storage before the write is considered complete
+> - The `_delta_log/` is the heart of Delta: numbered JSON files + Parquet checkpoints every 10 commits
+
+---
+
+**Q5: "When would you use Auto Loader vs COPY INTO vs a regular Spark read?"**
+
+| Scenario | Use |
+|---|---|
+| Continuously arriving files in cloud storage | **Auto Loader** (streaming, scalable, idempotent) |
+| One-time or daily SQL-based batch load | **COPY INTO** (simple, SQL, idempotent) |
+| Static dataset, known path, one-time load | **spark.read** (simplest, no tracking needed) |
+| DLT pipeline ingesting from cloud files | **Auto Loader** (cloud_files() in DLT) |
+| Billions of files in cloud storage | **Auto Loader** with file notification mode |
+
+---
+
+**Q6: "Explain Delta Live Tables and when you would use it vs regular notebooks."**
+
+> **Answer framework:**
+> - DLT = declarative pipeline framework; you define WHAT the tables should look like, DLT handles HOW to run, retry, scale
+> - Key advantages: automatic dependency resolution, built-in data quality (Expectations), lineage tracking, auto-restart
+> - `APPLY CHANGES INTO` = built-in CDC (insert/update/delete) handling with SCD1/SCD2
+> - Use DLT when: complex multi-table pipeline, data quality enforcement needed, CDC sources, want managed observability
+> - Use notebooks when: one-off exploration, simple single-table transformations, Python library dependencies
+
+---
+
+**Q7: "What is Photon and how does it differ from standard Spark?"**
+
+> **Answer:**
+> - Photon is Databricks' native vectorized query engine written in C++
+> - Transparent — no code changes; existing SQL/DataFrame code automatically benefits
+> - Uses SIMD (Single Instruction Multiple Data) to process batches of columns at once
+> - Best for: large table scans, SQL aggregations, joins
+> - Does NOT help: Python UDFs (they run in Python process, outside Photon)
+> - Only available on Databricks (not open-source Spark)
+
+---
+
+**Q8: "How do you handle data quality in a production pipeline?"**
+
+> **Answer framework (multi-layer approach):**
+> 1. **Schema enforcement** (Delta default) — rejects schema-incompatible writes at Bronze
+> 2. **DLT Expectations** — declarative quality rules with warn/drop/fail behavior at Silver
+> 3. **MERGE with filter** — only merge records passing quality checks
+> 4. **Monitoring** — DLT event log + alerting on expectation failure rates
+> 5. **Quarantine table** — route bad records to a separate `_quarantine` table for investigation
+
+```python
+# Pattern: quarantine bad records instead of dropping them
+@dlt.table(name="silver_orders")
+@dlt.expect_or_drop("valid_amount", "amount > 0")
+def silver_orders():
+    return dlt.read_stream("bronze_orders")
+
+@dlt.table(name="quarantine_orders")  # Bad records go here
+def quarantine_orders():
+    return dlt.read_stream("bronze_orders").filter(col("amount") <= 0)
+```
+
+---
+
+**Q9: "What is Unity Catalog and why is it better than the Hive Metastore?"**
+
+| Feature | Hive Metastore | Unity Catalog |
+|---|---|---|
+| Namespace | 2-level (db.table) | 3-level (catalog.schema.table) |
+| Governance scope | Per-workspace | Account-level (cross-workspace) |
+| Column/Row security | No | Yes (masks + filters) |
+| Data lineage | No | Automatic |
+| Audit logs | Limited | Full (system tables) |
+| Delta Sharing | No | Yes |
+| Fine-grained access | Limited | Full GRANT/REVOKE hierarchy |
+
+---
+
+**Q10: "How would you design a real-time pipeline for transaction data?"**
+
+> **Answer framework:**
+> ```
+> Kafka topic (transactions)
+>   ↓ Structured Streaming (readStream from Kafka)
+> Bronze Delta table (append-only, raw events)
+>   ↓ foreachBatch MERGE (streaming Silver upsert)
+> Silver Delta table (deduped, typed, CDF enabled)
+>   ↓ DLT materialized view refresh or batch aggregation
+> Gold Delta table (aggregated KPIs)
+>   ↓
+> Databricks SQL dashboard (Serverless SQL Warehouse)
+> ```
+> Key considerations: checkpointing, watermarking for late data, `spark.sql.shuffle.partitions` tuning, OPTIMIZE + ZORDER on Silver/Gold
+
+---
+
+### Technical Quick-Fire Questions
+
+| Question | Answer |
+|---|---|
+| Default shuffle partitions? | 200 (`spark.sql.shuffle.partitions`) |
+| What triggers a shuffle? | `groupBy`, `join`, `distinct`, `orderBy`, `repartition` |
+| VACUUM default retention? | 7 days (168 hours) |
+| Delta log checkpoint frequency? | Every 10 commits |
+| `foreachBatch` use case? | MERGE/upsert in streaming context |
+| AQE stands for? | Adaptive Query Execution |
+| `APPLY CHANGES INTO` requires? | DLT Pro or Advanced edition |
+| Liquid Clustering command? | `CLUSTER BY (col1, col2)` + `OPTIMIZE` |
+| `once=True` vs `availableNow=True`? | `once` is deprecated; use `availableNow` |
+| Managed vs External DROP TABLE? | Managed: deletes data. External: metadata only |
+| CDF change types? | insert, update_preimage, update_postimage, delete |
+| Broadcast threshold default? | 10 MB (`spark.sql.autoBroadcastJoinThreshold`) |
+| `coalesce` vs `repartition`? | coalesce: no shuffle, can only reduce. repartition: shuffle, can increase |
+| Photon helps Python UDFs? | No |
+| SCD Type 2 purpose? | Keep full history of changes |
+
+---
+
+### Extra Quick Hits (New Topics)
+
+16. **Shuffle** = data redistribution across network between executors; most expensive Spark operation
+17. **`spark.sql.shuffle.partitions`** = default 200; tune based on data volume (50 for small, 800+ for large)
+18. **AQE** = auto-coalesces shuffle partitions, auto-broadcasts small tables, handles skew joins
+19. **Liquid Clustering** = modern replacement for ZORDER; incremental, no table rewrite to change columns
+20. **Photon** = C++ vectorized engine; transparent; no benefit for Python UDFs
+21. **Serverless** = scales to zero; instant startup; recommended for SQL Warehouses
+22. **APPLY CHANGES INTO** = DLT CDC; requires Pro/Advanced; SCD1 (overwrite) or SCD2 (history)
+23. **`coalesce()`** = no shuffle when reducing partitions; `repartition()` = always shuffles
+24. **Partition pruning** = only filters on `partitionBy` columns prune file reads
+25. **Pandas UDF** = vectorized (Arrow); much faster than row-by-row Python UDF
+26. **`dbutils.secrets`** = access credentials from Secret Scope; values never printed in logs
+27. **`dbutils.widgets`** = notebook parameters; use `dbutils.widgets.get("key")` to retrieve
+28. **COPY INTO** = SQL batch ingestion; idempotent; simpler than Auto Loader; not for streaming
+29. **Bronze anti-pattern** = never UPDATE/DELETE Bronze records; preserve raw history always
+30. **Gold optimization** = always run `OPTIMIZE` + `ZORDER` after Gold table refresh
