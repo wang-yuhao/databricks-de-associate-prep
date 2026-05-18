@@ -360,3 +360,207 @@ Databricks SQL → Alerts → New Alert
 - [Workflows Documentation](https://docs.databricks.com/workflows/index.html)
 - [Asset Bundles Documentation](https://docs.databricks.com/dev-tools/bundles/index.html)
 - [APPLY CHANGES INTO (CDC)](https://docs.databricks.com/workflows/delta-live-tables/cdc.html)
+
+
+---
+
+## 6. Photon Engine
+
+Photon is Databricks' **native vectorized query engine** written in C++. It's a drop-in replacement for the standard Apache Spark SQL engine and runs automatically when available.
+
+### What is Photon?
+- A **C++ implementation** of the Spark SQL execution engine
+- Processes data in columnar batches (SIMD vectorization) instead of row-by-row
+- **Transparent** — no code changes required; existing SQL and DataFrame code benefits automatically
+- Available on clusters using **Databricks Runtime** (not open-source Spark)
+
+### When Does Photon Help?
+| Workload | Photon Benefit |
+|---|---|
+| Large table scans | Large (avoids row-by-row overhead) |
+| SQL aggregations (GROUP BY, COUNT, SUM) | Large |
+| Joins on large tables | Large |
+| Delta writes / OPTIMIZE / VACUUM | Medium |
+| String-heavy operations | Moderate |
+| Complex Python UDFs | ❌ No benefit (Python UDFs bypass Photon) |
+
+### How to Enable Photon
+```
+Cluster config → Enable Photon Acceleration (checkbox)
+  OR
+Cluster DBR >= 9.1 (Photon available on all DBR >= 9.1)
+```
+
+```python
+# Check if Photon is active in SparkUI or via:
+spark.conf.get("spark.databricks.photon.enabled")  # True if enabled
+```
+
+### Key Exam Points
+- Photon is **only available on Databricks** (not open-source Spark)
+- Photon is **enabled per cluster**, not per query
+- Photon **does NOT help** with Python UDFs (they escape to Python process)
+- Photon accelerates **SQL and DataFrame API** workloads
+- Photon uses **DBU (Databricks Unit)** at a different rate than standard clusters (check pricing)
+
+---
+
+## 7. Serverless Compute
+
+Serverless compute eliminates the need to configure and manage cluster infrastructure. Databricks automatically provisions resources and scales them.
+
+### Types of Serverless Compute
+
+| Type | Purpose | Notes |
+|---|---|---|
+| **Serverless SQL Warehouses** | Databricks SQL queries, BI tools | Scales to zero; instant startup |
+| **Serverless Jobs** | Automated job runs | Auto-scales; no cluster config needed |
+| **Serverless DLT** | Delta Live Tables pipelines | Managed infrastructure |
+| **Serverless Notebooks** | Interactive notebook execution | GA in Databricks as of 2024 |
+
+### Serverless vs Classic Clusters
+
+| Feature | Classic Clusters | Serverless |
+|---|---|---|
+| **Startup time** | 3–8 minutes | < 10 seconds |
+| **Configuration** | Manual (VM type, workers, etc.) | Automatic |
+| **Scaling** | Auto-scaling (slow) | Instant |
+| **Cost model** | Pay for cluster lifetime | Pay per query/task execution time |
+| **Idle cost** | High (cluster stays on) | Zero (scales to zero) |
+| **Customization** | Full (init scripts, instance types) | Limited |
+| **Unity Catalog** | Required for row/column security | Full support |
+
+### Serverless SQL Warehouses
+```
+Databricks SQL → SQL Warehouses → Create Warehouse
+  → Type: Serverless
+  → Size: Small / Medium / Large (auto-scales)
+  → Auto Stop: 10 min (configurable)
+```
+
+> 🔑 **Exam tip:** Serverless SQL Warehouses are the **recommended default** for new Databricks SQL deployments. They start instantly and cost nothing when idle.
+
+---
+
+## 8. APPLY CHANGES INTO — CDC in DLT
+
+`APPLY CHANGES INTO` is DLT's built-in Change Data Capture (CDC) mechanism. It processes CDC streams (inserts, updates, deletes) and maintains a Silver table with current state.
+
+### When to Use
+- Source emits CDC events: `INSERT`, `UPDATE`, `DELETE` with a sequence key
+- You want DLT to automatically manage the current state of a target table
+- Typical use case: CDC from databases (Debezium, Kafka CDC, DMS)
+
+### Syntax
+
+```sql
+-- SQL DLT: APPLY CHANGES INTO
+CREATE OR REFRESH STREAMING TABLE silver_customers;
+
+APPLY CHANGES INTO LIVE.silver_customers
+FROM STREAM(LIVE.bronze_customers_cdc)
+KEYS (customer_id)                     -- primary key for matching
+SEQUENCE BY update_timestamp           -- determines latest version
+COLUMNS * EXCEPT (_rescued_data)       -- columns to include
+STORED AS SCD TYPE 1;                  -- SCD1 = overwrite, SCD2 = keep history
+```
+
+```python
+# Python DLT: APPLY CHANGES INTO
+import dlt
+from pyspark.sql.functions import col
+
+dlt.create_streaming_table("silver_customers")
+
+dlt.apply_changes(
+    target="silver_customers",
+    source="bronze_customers_cdc",
+    keys=["customer_id"],
+    sequence_by=col("update_timestamp"),
+    stored_as_scd_type=1  # or 2 for history
+)
+```
+
+### SCD Type 1 vs SCD Type 2
+
+| Feature | SCD Type 1 | SCD Type 2 |
+|---|---|---|
+| **Updates** | Overwrite current record | Add new record, keep old |
+| **History** | No | Yes (full history preserved) |
+| **Use case** | Current state only | Audit trail, time-based analysis |
+| **DLT keyword** | `STORED AS SCD TYPE 1` | `STORED AS SCD TYPE 2` |
+
+> ⚠️ **Exam trap:** `APPLY CHANGES INTO` requires **DLT Pro or Advanced** edition (not Core). It's only available within DLT pipelines — you cannot use it in regular notebooks.
+
+---
+
+## 9. Databricks Runtime (DBR) Versions
+
+### DBR Flavors
+
+| Runtime | Description | Use Case |
+|---|---|---|
+| **DBR** (Standard) | Apache Spark + Databricks optimizations + common libs | General-purpose ETL |
+| **DBR ML** | Standard + MLflow, scikit-learn, TensorFlow, PyTorch | ML model training |
+| **DBR Photon** | Standard + Photon engine | SQL-heavy workloads |
+| **DBR GPU** | Standard + CUDA, cuDF, cuML | Deep learning, GPU workloads |
+
+### Key DBR Facts
+- DBR version = `15.x` format (e.g., DBR 15.4 LTS)
+- **LTS** = Long-Term Support (maintained 2+ years) — recommended for production
+- Databricks auto-upgrades cluster DBR only when you recreate the cluster
+- Job clusters automatically get the DBR version specified in the job config
+
+```python
+# Check current runtime version
+import databricks.sdk
+print(spark.conf.get("spark.databricks.clusterUsageTags.sparkVersion"))
+```
+
+---
+
+## 10. Databricks SQL (DBSQL) — Complete Picture
+
+### SQL Warehouse Types
+
+| Type | Description | When to Use |
+|---|---|---|
+| **Serverless** | Databricks-managed, instant start, auto-scale | Default for new deployments |
+| **Pro** | Customer VPC, predictable latency | Compliance, security requirements |
+| **Classic** | Legacy, runs on customer cluster | Legacy only |
+
+### Databricks SQL Features
+- **SQL Editor:** Write and run SQL queries, save as named queries
+- **Dashboards:** Visualize query results with charts, tables, counters
+- **Alerts:** Set thresholds on query results, notify via email/Slack
+- **Query History:** View all past queries, filter by user/status
+- **Query Profiles:** Visual execution plan (like EXPLAIN EXTENDED)
+
+### Query Optimization in DBSQL
+```sql
+-- Use EXPLAIN to view query plan
+EXPLAIN SELECT * FROM orders WHERE customer_id = '123';
+EXPLAIN FORMATTED SELECT ...;  -- more detailed
+
+-- Use CACHE TABLE for repeated access
+CACHE TABLE orders;             -- caches in Spark memory
+UNCACHE TABLE orders;           -- releases from cache
+
+-- Check table statistics (used by query optimizer)
+ANALYZE TABLE orders COMPUTE STATISTICS;
+ANALYZE TABLE orders COMPUTE STATISTICS FOR COLUMNS customer_id, order_date;
+```
+
+---
+
+## 11. Updated Exam-Focused Key Points
+
+### New Must-Know Topics
+- ✅ **Photon** = C++ vectorized engine; enabled per cluster; no code changes; doesn't help Python UDFs
+- ✅ **Serverless SQL Warehouse** = instant startup, scales to zero, recommended for DBSQL
+- ✅ **APPLY CHANGES INTO** = DLT CDC; requires Pro/Advanced edition; handles SCD Type 1 and 2
+- ✅ **SCD Type 1** = overwrite (latest state only); **SCD Type 2** = keep full history
+- ✅ **DBR LTS** = recommended for production (long-term support)
+- ✅ **Serverless vs Classic clusters**: Serverless = instant, no config, scales to zero
+- ✅ **ANALYZE TABLE** = updates column statistics for better query optimization
+- ✅ **`CACHE TABLE`** = stores table in Spark in-memory cache for repeated queries
