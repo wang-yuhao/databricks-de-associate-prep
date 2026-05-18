@@ -388,3 +388,140 @@ print("Q5: A — production mode creates new clusters and enables retry")
 - [DLT Quickstart (Official)](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-quickstart.html)
 - [CertSafari — DLT Questions](https://www.certsafari.com/databricks/data-engineer-associate) (filter by topic)
 - [ExamTopics DLT Thread](https://www.examtopics.com/discussions/databricks/)
+
+
+---
+
+## Task 6 — Photon Engine & Serverless Compute (20 min — Conceptual)
+
+### Photon Engine
+
+Photon is a Databricks-native vectorized query engine written in C++ that accelerates SQL and DataFrame workloads.
+
+**Key facts for the exam:**
+- Photon is automatically enabled on clusters with Photon-capable runtimes (DBR with Photon suffix)
+- It accelerates SQL queries, aggregations, joins, and scans
+- No code changes needed — it transparently replaces Spark's execution engine
+- Most beneficial for: large-scale aggregations, joins, and scans on columnar data
+- NOT available in Community Edition — requires paid workspace
+
+```python
+# Cell: Check if Photon is enabled (in a paid workspace)
+# In Community Edition, this will show photon = false
+spark.conf.get("spark.databricks.photon.enabled")
+```
+
+**When to use Photon:**
+- BI/SQL workloads with large scans
+- ETL jobs with heavy aggregations
+- NOT needed for streaming-only or ML training workloads
+
+---
+
+### Serverless Compute
+
+Serverless Compute removes the need to manage cluster infrastructure. Databricks automatically provisions and scales compute.
+
+**Key facts for the exam:**
+- Serverless SQL Warehouses: for SQL analytics / BI dashboards (auto-scaling, instant start)
+- Serverless Jobs: for running notebooks and workflows without cluster management
+- Billing: per-second billing based on DBUs consumed (no idle cost)
+- Cold start: nearly instant (< 5 seconds vs 5+ minutes for classic clusters)
+
+**Classic Cluster vs Serverless:**
+
+| Feature | Classic Cluster | Serverless |
+|---|---|---|
+| Startup time | 5-10 minutes | < 5 seconds |
+| Management | Manual config | Fully managed |
+| Scaling | Manual/auto-scale | Automatic |
+| Idle cost | Billed when idle | No idle cost |
+| Availability | Community Edition | Paid workspaces |
+
+```python
+# Conceptual Exercise: Answer these questions
+
+questions = [
+    "Q1: Which compute type has nearly instant startup?",
+    "Q2: Which runtime accelerates SQL without code changes?",
+    "Q3: Is Photon available in Community Edition?",
+    "Q4: What is the billing model for Serverless?",
+    "Q5: When is Photon NOT beneficial?"
+]
+
+answers = [
+    "A1: Serverless Compute (< 5 second cold start)",
+    "A2: Photon Engine (transparent acceleration)",
+    "A3: No — Photon requires a paid Databricks workspace",
+    "A4: Per-second billing on DBUs consumed, no idle cost",
+    "A5: Streaming-only workloads and ML training (less columnar scan benefit)"
+]
+
+for q, a in zip(questions, answers):
+    print(q)
+    print(a)
+    print()
+```
+
+---
+
+## Task 7 — Unity Catalog Basics (20 min)
+
+Unity Catalog is Databricks' unified governance solution for data and AI.
+
+**Three-level namespace:** `catalog.schema.table`
+
+```sql
+-- The three-level namespace
+-- catalog = top level (e.g., "main", "dev", "prod")
+-- schema  = database (e.g., "sales", "marketing")
+-- table   = the actual table
+
+-- Example:
+SELECT * FROM main.sales.transactions;
+
+-- In Community Edition, use hive_metastore as catalog:
+SELECT * FROM hive_metastore.default.my_table;
+```
+
+```sql
+-- Create a catalog (requires Unity Catalog enabled workspace)
+-- CREATE CATALOG IF NOT EXISTS my_catalog;
+
+-- Create a schema within a catalog
+-- CREATE SCHEMA IF NOT EXISTS my_catalog.my_schema;
+
+-- Grant permissions (Unity Catalog)
+-- GRANT SELECT ON TABLE my_catalog.my_schema.my_table TO `user@company.com`;
+-- GRANT USAGE ON SCHEMA my_catalog.my_schema TO `analyst_group`;
+```
+
+**Key Unity Catalog concepts for the exam:**
+- `GRANT` / `REVOKE` for access control
+- Row-level and column-level security via dynamic views
+- Data lineage: automatically tracked across notebooks, jobs, and SQL queries
+- Metastore: one per region, shared across workspaces
+
+```python
+# Conceptual Quiz
+uc_facts = {
+    "Namespace levels": "catalog.schema.table (3 levels)",
+    "Default catalog in CE": "hive_metastore",
+    "Grant syntax": "GRANT privilege ON object TO principal",
+    "Lineage tracking": "Automatic — no extra config needed",
+    "Metastore scope": "Per region, shared across workspaces"
+}
+
+for concept, fact in uc_facts.items():
+    print(f"{concept}: {fact}")
+```
+
+---
+
+## ✅ Day 5 Extended Checklist
+
+- [ ] Understand what Photon Engine does and when to use it
+- [ ] Know the difference between Classic Cluster and Serverless
+- [ ] Can explain the Unity Catalog three-level namespace
+- [ ] Know how to GRANT permissions in Unity Catalog
+- [ ] Understand that Photon is NOT available in Community Edition
