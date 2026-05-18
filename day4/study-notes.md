@@ -294,3 +294,233 @@ foreachBatch → only way to MERGE in streaming
 - [ ] Implement `foreachBatch` for MERGE upsert pattern
 - [ ] Read a Delta table as a stream with CDF enabled
 - [ ] Monitor streaming query status
+
+
+---
+
+## 13. Kafka as a Streaming Source
+
+Kafka is a distributed event-streaming platform. In Databricks, you can read from Kafka topics as a Structured Streaming source.
+
+### Reading from Kafka
+
+```python
+# Read from Kafka topic as a stream
+kafka_df = (
+    spark.readStream
+    .format("kafka")
+    .option("kafka.bootstrap.servers", "broker1:9092,broker2:9092")
+    .option("subscribe", "orders_topic")          # single topic
+    # OR: .option("subscribePattern", "orders_.*")  # regex pattern for multiple topics
+    # OR: .option("assign", '{"orders_topic":[0,1,2]}')  # specific partitions
+    .option("startingOffsets", "earliest")         # earliest | latest | specific JSON
+    .option("maxOffsetsPerTrigger", 10000)         # rate limit per batch
+    .load()
+)
+
+# Kafka DataFrame schema (always the same):
+# key: BINARY, value: BINARY, topic: STRING, partition: INT,
+# offset: LONG, timestamp: TIMESTAMP, timestampType: INT
+```
+
+### Deserializing Kafka Messages
+
+```python
+from pyspark.sql.functions import col, from_json, cast
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+
+# Define the schema of the JSON payload
+order_schema = StructType([
+    StructField("order_id", StringType()),
+    StructField("customer_id", StringType()),
+    StructField("amount", DoubleType()),
+    StructField("status", StringType())
+])
+
+# Deserialize: key and value are binary — cast to STRING first
+parsed_df = (
+    kafka_df
+    .select(
+        col("key").cast("string").alias("key"),
+        from_json(col("value").cast("string"), order_schema).alias("data"),
+        col("topic"),
+        col("partition"),
+        col("offset"),
+        col("timestamp")
+    )
+    .select("key", "data.*", "topic", "partition", "offset", "timestamp")
+)
+
+# Write to Delta Bronze
+parsed_df.writeStream \
+    .format("delta") \
+    .outputMode("append") \
+    .option("checkpointLocation", "/checkpoints/kafka_bronze") \
+    .trigger(availableNow=True) \
+    .table("catalog.bronze.raw_orders")
+```
+
+### Writing to Kafka
+
+```python
+# Write DataFrame back to Kafka (must have 'value' column, optionally 'key')
+from pyspark.sql.functions import to_json, struct
+
+(
+    df
+    .select(
+        col("order_id").cast("string").alias("key"),   # optional key
+        to_json(struct("*")).alias("value")             # serialize all cols as JSON
+    )
+    .writeStream
+    .format("kafka")
+    .option("kafka.bootstrap.servers", "broker1:9092")
+    .option("topic", "processed_orders")
+    .option("checkpointLocation", "/checkpoints/kafka_sink")
+    .start()
+)
+```
+
+### Key Kafka Options Reference
+
+| Option | Description | Example |
+|---|---|---|
+| `kafka.bootstrap.servers` | Comma-separated broker list | `broker1:9092,broker2:9092` |
+| `subscribe` | Single topic or comma-separated list | `orders,returns` |
+| `subscribePattern` | Regex for multiple topics | `orders_.*` |
+| `startingOffsets` | Where to start reading | `earliest`, `latest`, JSON |
+| `maxOffsetsPerTrigger` | Rate limit per micro-batch | `10000` |
+| `kafka.security.protocol` | Auth protocol | `SASL_SSL` |
+| `kafka.sasl.mechanism` | SASL mechanism | `PLAIN` |
+| `failOnDataLoss` | Fail if offsets are missing | `false` (recommended) |
+
+> ⚠️ **Exam trap:** Kafka `value` is **BINARY** — you must cast to STRING before parsing JSON. The schema of a Kafka DataFrame always has fixed columns: `key`, `value`, `topic`, `partition`, `offset`, `timestamp`.
+
+---
+
+## 14. Streaming Deduplication
+
+Duplicate records in streaming pipelines are common (at-least-once delivery from Kafka, retries, etc.). Spark Structured Streaming supports stateful deduplication.
+
+```python
+# Deduplicate streaming records by primary key
+deduped_df = (
+    parsed_df
+    .dropDuplicates(["order_id"])  # stateful: tracks seen order_ids
+)
+
+# With watermark: only track duplicates within the time window
+# (limits state store size)
+deduped_with_watermark = (
+    parsed_df
+    .withWatermark("timestamp", "1 hour")   # forget order_ids older than 1 hour
+    .dropDuplicates(["order_id", "timestamp"])  # dedupe within watermark window
+)
+```
+
+> 🔑 **Key point:** Without watermark, `dropDuplicates()` on a stream keeps ALL seen keys in state forever (unbounded state). With watermark, old keys are evicted, bounding memory usage.
+
+---
+
+## 15. Data Skew in Streaming
+
+Data skew happens when some partitions have dramatically more data than others, causing slow tasks.
+
+### Symptoms
+- Spark UI shows one task running much longer than others (stragglers)
+- OOM errors on specific executors
+- Low CPU utilization on most executors
+
+### Solutions
+
+```python
+# 1. AQE (Adaptive Query Execution) — enabled by default
+# Automatically splits skewed partitions
+spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")        # default True
+spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionFactor", "5")  # 5x median
+
+# 2. Salting — add random prefix to distribute hot keys
+from pyspark.sql.functions import concat, lit, floor, rand
+
+# Add salt to the hot key column (distribute across N buckets)
+N = 10
+salted_df = df.withColumn(
+    "salted_key",
+    concat(col("customer_id"), lit("_"), (floor(rand() * N)).cast("string"))
+)
+
+# 3. Repartition by join key before join
+df1_repartitioned = df1.repartition(200, col("customer_id"))
+df2_repartitioned = df2.repartition(200, col("customer_id"))
+result = df1_repartitioned.join(df2_repartitioned, "customer_id")
+
+# 4. Broadcast join — if one side is small enough (< 10MB default threshold)
+from pyspark.sql.functions import broadcast
+result = large_df.join(broadcast(small_lookup_df), "customer_id")
+```
+
+---
+
+## 16. Stateful Operations Summary
+
+Stateful operations maintain per-key state across micro-batches. They require a checkpoint and consume memory.
+
+| Operation | Stateful? | Requires Watermark? | State Bounded? |
+|---|---|---|---|
+| `groupBy().agg()` | Yes | Recommended | No (unless watermark) |
+| `dropDuplicates()` | Yes | Recommended | No (unless watermark) |
+| `groupBy(window()).agg()` | Yes | Required for append mode | Yes (with watermark) |
+| `join(stream, stream)` | Yes | Required | Yes (with watermark) |
+| `join(stream, static)` | No | No | N/A |
+| `filter()`, `select()` | No | No | N/A |
+
+> 🔑 **Interview key point:** Stateful operations without watermarks can cause OOM in long-running streams. Always add watermark when the state could grow unbounded.
+
+---
+
+## 17. Stream-Stream Joins
+
+Joining two streaming DataFrames requires **watermarks on both sides** to bound state.
+
+```python
+# Both streams must have watermarks
+orders_stream = (
+    spark.readStream.format("delta").table("bronze.orders")
+    .withWatermark("order_time", "10 minutes")
+)
+
+shipments_stream = (
+    spark.readStream.format("delta").table("bronze.shipments")
+    .withWatermark("ship_time", "30 minutes")
+)
+
+# Join with time constraint (helps bound state)
+joined = orders_stream.join(
+    shipments_stream,
+    (orders_stream.order_id == shipments_stream.order_id) &
+    (orders_stream.order_time.between(
+        shipments_stream.ship_time - expr("INTERVAL 30 MINUTES"),
+        shipments_stream.ship_time + expr("INTERVAL 5 MINUTES")
+    )),
+    "inner"
+)
+```
+
+> ⚠️ **Exam trap:** Stream-stream joins only support `inner`, `left outer`, and `right outer` join types. Full outer joins on streams are NOT supported.
+
+---
+
+## 18. Updated Day 4 Checklist
+
+- [ ] Explain the 5 trigger types and when to use each
+- [ ] Write a streaming query with checkpoint + watermark
+- [ ] Explain difference between append/complete/update output modes
+- [ ] Implement `foreachBatch` for MERGE upsert pattern
+- [ ] Read a Delta table as a stream with CDF enabled
+- [ ] Monitor streaming query status
+- [ ] **Read from a Kafka topic and deserialize JSON payload**
+- [ ] **Explain why Kafka `value` must be cast to STRING first**
+- [ ] **Implement streaming deduplication with `dropDuplicates()` + watermark**
+- [ ] **Explain data skew symptoms and 3 solutions (AQE, salting, broadcast)**
+- [ ] **Know which streaming operations are stateful and why watermark bounds state**
+- [ ] **Know stream-stream join limitations (no full outer)**
