@@ -166,3 +166,175 @@ Metastore  (one per region/account)
 - [Databricks Architecture](https://docs.databricks.com/en/getting-started/overview.html)
 - [Cluster Types](https://docs.databricks.com/en/compute/index.html)
 - [Unity Catalog Overview](https://docs.databricks.com/en/data-governance/unity-catalog/index.html)
+
+
+---
+
+## 1.7 Cluster Configuration Deep Dive
+
+### Instance Pools
+Instance pools maintain a set of **idle, ready-to-use VM instances** to reduce cluster startup time.
+
+- **Without pool:** Cluster start = 3–8 minutes (cloud VM provisioning)
+- **With pool:** Cluster start = 30–60 seconds (instances already running)
+- Instances in the pool are billed at a reduced DBU rate when idle
+- Configure min/max idle instances and instance type
+
+```
+Workspace → Compute → Instance Pools → Create Pool
+  → Min Idle Instances: 2
+  → Max Capacity: 10
+  → Instance Type: Standard_DS3_v2 (Azure) / m5.xlarge (AWS)
+  → Idle Instance Auto Termination: 60 min
+```
+
+### Cluster Policies
+Cluster policies **restrict what cluster configurations users can create**, enforcing cost controls and best practices.
+
+**Use cases:**
+- Prevent users from creating expensive large clusters
+- Enforce auto-termination settings
+- Mandate specific DBR versions
+- Restrict instance types
+
+```json
+// Example cluster policy JSON
+{
+  "autotermination_minutes": {
+    "type": "fixed",
+    "value": 30,
+    "hidden": false
+  },
+  "node_type_id": {
+    "type": "allowlist",
+    "values": ["Standard_DS3_v2", "Standard_DS4_v2"]
+  },
+  "num_workers": {
+    "type": "range",
+    "minValue": 1,
+    "maxValue": 10
+  },
+  "spark_version": {
+    "type": "regex",
+    "pattern": ".*lts.*",
+    "defaultValue": "15.4.x-scala2.12"
+  }
+}
+```
+
+> 🔑 **Exam key point:** Cluster policies are defined by admins and assigned to users/groups. Users can only create clusters that comply with the policy. Policies enforce governance at the compute layer.
+
+### Init Scripts
+Init scripts are shell scripts that run on **every node of every cluster** at startup, before the Spark context is created.
+
+**Use cases:**
+- Install OS-level packages (`apt-get install ...`)
+- Install Python packages not in DBR
+- Set environment variables
+- Configure network settings
+
+```bash
+#!/bin/bash
+# Example init script: install a Python package
+pip install great-expectations==0.18.0
+
+# Install OS package
+apt-get install -y libgomp1
+
+# Set environment variable
+export MY_COMPANY_ENV=production
+```
+
+```python
+# Attach init script via cluster config (UI or API)
+# Scripts can be stored in:
+# - DBFS: dbfs:/databricks/scripts/my_init.sh
+# - Volumes: /Volumes/catalog/schema/volume/scripts/my_init.sh  (preferred)
+# - Workspace: /Users/user@company.com/init.sh
+```
+
+| Init Script Type | When It Runs | Scope |
+|---|---|---|
+| **Cluster-scoped** | On that cluster only | Attached in cluster config |
+| **Global** | On ALL clusters in workspace | Set by admin in workspace settings |
+
+> ⚠️ **Exam trap:** Init scripts run at cluster **startup**, not at notebook execution. If the script fails, the cluster fails to start. Test scripts on a dev cluster before using in production.
+
+### Cluster Tags
+Tags are key-value metadata attached to clusters for **cost allocation and chargeback**.
+
+```python
+# Cluster tags appear in cloud billing reports
+# Example tags:
+{
+  "team": "data-engineering",
+  "project": "etl-pipeline",
+  "environment": "production",
+  "cost_center": "1234"
+}
+```
+
+---
+
+## 1.8 DBU (Databricks Unit) Pricing Model
+
+Databricks charges in **DBUs (Databricks Units)** — a unit of processing capability per hour.
+
+### DBU Rates by Workload
+
+| Workload | DBU Rate |
+|---|---|
+| All-Purpose compute (interactive) | Highest DBU rate |
+| Jobs compute (automated) | Lower DBU rate |
+| SQL Warehouses (Serverless) | Per query execution time |
+| Instance Pool (idle) | Reduced DBU rate |
+| DLT (Delta Live Tables) | Pipeline DBU rate |
+
+> 🔑 **Key point:** **Job clusters are always cheaper than all-purpose clusters** for the same workload because they use the Jobs compute DBU rate. This is why you should use job clusters for production pipelines.
+
+### Cost Optimization Best Practices
+1. **Always set auto-termination** on all-purpose clusters (30–60 min)
+2. **Use job clusters** (not all-purpose) for scheduled pipelines
+3. **Use instance pools** to reduce startup time while minimizing idle cost
+4. **Use cluster policies** to cap max workers and enforce auto-termination
+5. **Use Serverless SQL Warehouses** for ad-hoc SQL — zero idle cost
+6. **Use Single Node** clusters for development/prototyping (no worker cost)
+7. **Tag all clusters** for cost tracking
+
+---
+
+## 1.9 Databricks Repos vs Workspace Files
+
+### Repos (Git-backed)
+- Connected to a Git provider (GitHub, GitLab, Bitbucket, Azure DevOps)
+- Supports: clone, pull, push, create branch, merge, create PR
+- Files in Repos are versioned in Git
+- **Best for:** collaborative development, CI/CD, production code
+- Supports **sparse checkout** — only check out specific folders
+
+### Workspace Files
+- Native Databricks workspace, no Git connection
+- Supports notebooks, folders, dashboards
+- **Best for:** quick experimentation, shared dashboards
+- Cannot push/pull to Git directly
+
+| Feature | Repos | Workspace Files |
+|---|---|---|
+| Git integration | ✅ Yes | ❌ No |
+| Branching | ✅ Yes | ❌ No |
+| PR workflow | ✅ Yes | ❌ No |
+| Collaboration | Branching-based | Sharing-based |
+| Recommended for production | ✅ Yes | ❌ No |
+
+---
+
+## 1.10 Updated Key Exam-Focus Points
+
+8. ✅ Know **instance pools** — reduce cluster startup time; idle VMs billed at lower DBU rate
+9. ✅ Know **cluster policies** — admin-defined JSON constraints on cluster config; enforces cost controls
+10. ✅ Know **init scripts** — shell scripts on all nodes at startup; stored in Volumes or DBFS
+11. ✅ Know **DBU** — job clusters have lower DBU rate than all-purpose; always use job clusters for production
+12. ✅ Know **cluster tags** — key-value metadata for cost allocation and chargeback
+13. ✅ Know **Repos vs Workspace Files** — Repos = Git-backed; use for production code
+14. ✅ Know **auto-termination** — always set on all-purpose clusters to avoid idle costs
+15. ✅ Know **Single Node cluster** — driver only, no workers; good for small data and ML dev
