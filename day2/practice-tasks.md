@@ -252,3 +252,240 @@ Go to [CertSafari](https://www.certsafari.com/databricks/data-engineer-associate
 
 **Score:** ___ / 20  
 **Weak areas:** ___________________________
+
+
+---
+
+## Task 6: Partitioning and Shuffle (30 min)
+
+```python
+# Task 6a: Check and control partitions
+print(f"Default partitions: {employees.rdd.getNumPartitions()}")
+
+# Repartition to 4 (causes a shuffle)
+df_repartitioned = employees.repartition(4)
+print(f"After repartition(4): {df_repartitioned.rdd.getNumPartitions()}")
+
+# Coalesce to 2 (no shuffle)
+df_coalesced = df_repartitioned.coalesce(2)
+print(f"After coalesce(2): {df_coalesced.rdd.getNumPartitions()}")
+
+# Repartition by specific column (hash partitioning)
+df_by_dept = employees.repartition(4, col("department"))
+print(f"After repartition by department: {df_by_dept.rdd.getNumPartitions()}")
+```
+
+```python
+# Task 6b: Observe shuffle partition setting
+print(f"Current shuffle partitions: {spark.conf.get('spark.sql.shuffle.partitions')}")
+
+# Trigger a shuffle: groupBy causes a shuffle
+result = employees.groupBy("department").count()
+result.explain(True)  # View the execution plan — look for Exchange (shuffle)
+
+# Reduce shuffle partitions for small data
+spark.conf.set("spark.sql.shuffle.partitions", "4")
+result2 = employees.groupBy("department").count()
+result2.explain()  # Now should show fewer shuffle partitions
+```
+
+```python
+# Task 6c: Broadcast join vs regular join
+from pyspark.sql.functions import broadcast
+import time
+
+# Regular join (may shuffle both sides)
+start = time.time()
+result_regular = employees.join(departments, employees.department == departments.dept_name)
+result_regular.count()
+print(f"Regular join: {time.time() - start:.3f}s")
+
+# Broadcast join (small table broadcast, no shuffle)
+start = time.time()
+result_broadcast = employees.join(broadcast(departments), employees.department == departments.dept_name)
+result_broadcast.count()
+print(f"Broadcast join: {time.time() - start:.3f}s")
+
+# View the plan: look for BroadcastHashJoin vs SortMergeJoin
+result_broadcast.explain()
+```
+
+```python
+# Task 6d: Write partitioned data and observe partition pruning
+import os
+
+# First, create a larger dataset with year/month
+from pyspark.sql.functions import lit
+
+orders_data = [
+    (1, "Widget A", 100.0, 2024, 1),
+    (2, "Widget B", 200.0, 2024, 1),
+    (3, "Widget C", 150.0, 2024, 2),
+    (4, "Widget D", 300.0, 2023, 12),
+    (5, "Widget E", 250.0, 2023, 11),
+]
+orders = spark.createDataFrame(orders_data, ["id", "product", "amount", "year", "month"])
+
+# Write partitioned by year and month
+orders.write \
+    .mode("overwrite") \
+    .partitionBy("year", "month") \
+    .format("delta") \
+    .save("/tmp/orders_partitioned")
+
+# Read with partition filter (partition pruning — reads only matching folders)
+df_pruned = spark.read.format("delta").load("/tmp/orders_partitioned") \
+    .filter("year = 2024 AND month = 1")
+
+df_pruned.explain()  # Look for PartitionFilters in the plan
+df_pruned.show()
+```
+
+**Questions to answer:**
+- After `repartition(4, col("department"))`, how many files will be written per partition?
+- Why is `coalesce()` preferred after a filter operation before writing?
+- In the explain plan, what operator indicates a shuffle (data movement)?
+
+---
+
+## Task 7: UDFs — Python UDF, Pandas UDF, SQL UDF (30 min)
+
+```python
+# Task 7a: Register a Python UDF
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+
+def salary_band(salary):
+    """Classify salary into bands"""
+    if salary is None:
+        return "Unknown"
+    elif salary < 70000:
+        return "Junior"
+    elif salary < 90000:
+        return "Mid"
+    else:
+        return "Senior"
+
+salary_band_udf = udf(salary_band, StringType())
+
+# Apply Python UDF
+result_7a = employees.withColumn("band", salary_band_udf(col("salary")))
+result_7a.show()
+# Note: Python UDFs are slow (row-by-row, pickle serialization)
+```
+
+```python
+# Task 7b: Pandas UDF (much faster!)
+from pyspark.sql.functions import pandas_udf
+import pandas as pd
+
+@pandas_udf(StringType())
+def salary_band_pandas(salaries: pd.Series) -> pd.Series:
+    """Vectorized version — processes entire column at once"""
+    def classify(s):
+        if pd.isna(s): return "Unknown"
+        elif s < 70000: return "Junior"
+        elif s < 90000: return "Mid"
+        else: return "Senior"
+    return salaries.apply(classify)
+
+result_7b = employees.withColumn("band", salary_band_pandas(col("salary")))
+result_7b.show()
+# Compare: Pandas UDF uses Apache Arrow — much faster than Python UDF for large data
+```
+
+```sql
+-- Task 7c: SQL UDF (persistent, stored in catalog)
+-- Note: In Community Edition, this creates a temporary function
+%sql
+CREATE OR REPLACE TEMPORARY FUNCTION salary_band_sql(salary INT)
+RETURNS STRING
+RETURN CASE
+    WHEN salary IS NULL THEN 'Unknown'
+    WHEN salary < 70000 THEN 'Junior'
+    WHEN salary < 90000 THEN 'Mid'
+    ELSE 'Senior'
+END;
+
+-- Use the SQL UDF
+SELECT name, salary, salary_band_sql(salary) AS band
+FROM employees_view
+ORDER BY salary DESC;
+```
+
+**Questions to answer:**
+- Why should you prefer built-in Spark functions over Python UDFs?
+- What is the key serialization advantage of Pandas UDFs over Python UDFs?
+- In which access mode can Python UDFs NOT be used with Unity Catalog?
+
+---
+
+## Task 8: dbutils Essentials (20 min)
+
+```python
+# Task 8a: File system operations
+# Create a directory
+dbutils.fs.mkdirs("/tmp/dbutils_practice/")
+
+# Write some data
+dbutils.fs.put("/tmp/dbutils_practice/hello.txt", "Hello, Databricks!", overwrite=True)
+
+# List files
+files = dbutils.fs.ls("/tmp/dbutils_practice/")
+for f in files:
+    print(f"Name: {f.name}, Size: {f.size} bytes, Path: {f.path}")
+
+# Read file content
+content = dbutils.fs.head("/tmp/dbutils_practice/hello.txt")
+print(f"File content: {content}")
+
+# Copy file
+dbutils.fs.cp("/tmp/dbutils_practice/hello.txt", "/tmp/dbutils_practice/hello_copy.txt")
+
+# Verify copy
+print(dbutils.fs.ls("/tmp/dbutils_practice/"))
+
+# Delete
+dbutils.fs.rm("/tmp/dbutils_practice/hello_copy.txt")
+```
+
+```python
+# Task 8b: Widgets for parameterized notebooks
+# Create widgets
+dbutils.widgets.text("start_date", "2024-01-01", "Start Date")
+dbutils.widgets.dropdown("environment", "dev", ["dev", "staging", "prod"], "Environment")
+dbutils.widgets.text("max_records", "1000", "Max Records")
+
+# Get widget values
+start_date = dbutils.widgets.get("start_date")
+env = dbutils.widgets.get("environment")
+max_records = int(dbutils.widgets.get("max_records"))
+
+print(f"Processing from {start_date} in {env} environment, max {max_records} records")
+
+# Use widget values in query
+df_filtered = employees.filter(col("salary") <= max_records * 100)
+df_filtered.show()
+
+# Cleanup
+dbutils.widgets.removeAll()
+```
+
+```python
+# Task 8c: Secret access pattern (conceptual — requires secret scope setup)
+# In production, you would access credentials like this:
+# password = dbutils.secrets.get(scope="my-scope", key="db-password")
+# Never hardcode credentials!
+
+# List available scopes (shows what's accessible)
+try:
+    scopes = dbutils.secrets.listScopes()
+    print(f"Available scopes: {[s.name for s in scopes]}")
+except Exception as e:
+    print(f"No secret scopes configured in this environment: {e}")
+```
+
+**Questions to answer:**
+- What is the difference between `dbutils.fs.ls()` and `%fs ls`?
+- Why should you NEVER hardcode credentials in a notebook? What should you use instead?
+- How do you pass parameters to a notebook job using `dbutils.widgets`?
