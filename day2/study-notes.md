@@ -297,3 +297,287 @@ df = (spark.readStream
 - [PySpark SQL Functions Reference](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/functions/index.html)
 - [Auto Loader Docs](https://docs.databricks.com/en/ingestion/auto-loader/index.html)
 - [DataFrame Reader/Writer](https://docs.databricks.com/en/ingestion/index.html)
+
+
+---
+
+## 2.7 Spark Execution Model — DAG, Stages, Tasks
+
+Understanding how Spark executes work is critical for performance optimization and interview questions.
+
+### Key Concepts
+
+| Term | Definition |
+|---|---|
+| **Job** | Triggered by an action (e.g., `.count()`, `.show()`, `.write()`). One job per action. |
+| **Stage** | A set of tasks that can run in parallel without a shuffle. Stage boundaries = wide transformations. |
+| **Task** | Smallest unit of work. One task per partition. Runs on one executor core. |
+| **DAG** | Directed Acyclic Graph — Spark's execution plan. DAG Scheduler splits it into stages. |
+| **Executor** | JVM process on a worker node. Runs tasks and caches data. |
+| **Driver** | Coordinates the job. Runs the main program, creates SparkContext. |
+
+### Narrow vs. Wide Transformations
+
+| Type | Definition | Examples | Shuffle? |
+|---|---|---|---|
+| **Narrow** | Each partition produces exactly one output partition. No data movement across executors. | `map()`, `filter()`, `select()`, `withColumn()`, `union()` | ❌ No |
+| **Wide** | Multiple input partitions contribute to multiple output partitions. Requires **shuffle**. | `groupBy()`, `join()`, `distinct()`, `orderBy()`, `repartition()` | ✅ Yes |
+
+> 🔑 **Interview key point:** Wide transformations trigger a shuffle, which is the most expensive operation in Spark. Optimizing shuffle = optimizing Spark.
+
+---
+
+## 2.8 Shuffle — The Most Important Spark Performance Concept
+
+A **shuffle** is the redistribution of data across the network between executors. It happens when Spark needs to reorganize data across partitions — for example, to group all records with the same key together.
+
+### What Triggers a Shuffle?
+- `groupBy()` + aggregation
+- `join()` (unless broadcast join)
+- `distinct()`
+- `orderBy()` / `sort()`
+- `repartition()`
+- Window functions with `PARTITION BY`
+
+### Why Is Shuffle Expensive?
+1. **Disk I/O** — shuffle data is written to disk (spill)
+2. **Network I/O** — data travels across the network between executors
+3. **Serialization/deserialization** — data must be serialized for transfer
+
+### Key Shuffle Setting
+```python
+# Number of shuffle partitions (default = 200)
+# Too many = overhead; Too few = large partitions, OOM risk
+spark.conf.set("spark.sql.shuffle.partitions", "200")  # default
+spark.conf.set("spark.sql.shuffle.partitions", "400")  # scale up for large data
+spark.conf.set("spark.sql.shuffle.partitions", "50")   # scale down for small data
+
+# Check current setting
+spark.conf.get("spark.sql.shuffle.partitions")
+```
+
+> ⚠️ **Exam & Interview trap:** The default `spark.sql.shuffle.partitions=200` is often wrong for your data size. Too many partitions → many small tasks, overhead. Too few → OOM errors. Tune based on data volume.
+
+### Adaptive Query Execution (AQE) — Automatic Shuffle Optimization
+Databricks enables **AQE by default** (Spark 3.0+). AQE automatically:
+- **Coalesces shuffle partitions** — merges small partitions after shuffle
+- **Switches join strategies** — converts sort-merge join to broadcast join if one side is small
+- **Optimizes skew joins** — splits skewed partitions
+
+```python
+# AQE is ON by default in Databricks
+spark.conf.get("spark.sql.adaptive.enabled")  # True
+
+# AQE coalesce: merges shuffle partitions that are small
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+```
+
+### Shuffle Optimization Strategies
+
+| Strategy | When to Use | Code |
+|---|---|---|
+| **Broadcast join** | One table < 10 MB (auto) or < broadcast threshold | `broadcast(small_df)` or auto |
+| **Reduce shuffle partitions** | Small/medium datasets | `spark.sql.shuffle.partitions = 50` |
+| **Increase shuffle partitions** | Large datasets (>100GB) | `spark.sql.shuffle.partitions = 800` |
+| **Pre-sort/pre-partition** | Repeated joins on same key | Partition by join key beforehand |
+| **AQE** | Always — enabled by default | No action needed |
+
+---
+
+## 2.9 Partitioning — Controlling Data Layout
+
+### RDD/DataFrame Partitions
+Every DataFrame is split into **partitions** — chunks of data processed independently by executors.
+
+```python
+# Check current number of partitions
+df.rdd.getNumPartitions()  # e.g., 8
+
+# Increase partitions (causes a shuffle)
+df_repartitioned = df.repartition(100)
+df_repartitioned = df.repartition(100, col("customer_id"))  # hash-partition by column
+
+# Decrease partitions (NO shuffle — just merges)
+df_coalesced = df.coalesce(10)  # cannot increase with coalesce
+```
+
+### `repartition()` vs `coalesce()`
+| | `repartition(n)` | `coalesce(n)` |
+|---|---|---|
+| **Shuffle** | ✅ Always shuffles | ❌ No shuffle (avoids it) |
+| **Can increase partitions** | ✅ Yes | ❌ No |
+| **Output partition size** | Even distribution | May be uneven |
+| **Use case** | Need exact N partitions, or even distribution | Reduce partitions efficiently after filter |
+
+> 🔑 **Pattern:** After a heavy filter that reduces data significantly, use `coalesce()` to reduce partitions without a shuffle before writing.
+
+### Writing with Partitions
+```python
+# Partition data on disk by column (creates folder hierarchy)
+df.write \
+    .partitionBy("year", "month") \
+    .format("delta") \
+    .save("/mnt/data/sales")
+
+# Results in:
+# /mnt/data/sales/year=2024/month=01/part-00001.parquet
+# /mnt/data/sales/year=2024/month=02/part-00001.parquet
+```
+
+### Partition Pruning (Data Skipping)
+When you read a partitioned table with a filter on the partition column, Spark **only reads the relevant folders** — skipping the rest. This is called **partition pruning**.
+
+```sql
+-- Spark reads only year=2024/month=01/ folder — skips all others
+SELECT * FROM sales WHERE year = 2024 AND month = 1;
+```
+
+> ⚠️ **Exam trap:** Partition pruning only works when you filter on the **partition column** (the column used in `partitionBy`). Filtering on non-partition columns doesn't prune.
+
+### When to Partition on Disk
+- **High-cardinality columns**: bad choice (too many folders, too many small files)
+- **Low-to-medium cardinality + frequently filtered**: ideal (e.g., `year`, `month`, `country`, `status`)
+- Rule of thumb: each partition should be **>= 128 MB** of data
+
+---
+
+## 2.10 UDFs — User Defined Functions
+
+### Python UDFs
+```python
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+
+# Define a Python function
+def categorize_age(age):
+    if age < 18:
+        return "minor"
+    elif age < 65:
+        return "adult"
+    else:
+        return "senior"
+
+# Register as UDF
+categorize_udf = udf(categorize_age, StringType())
+
+# Use in DataFrame
+df.withColumn("age_group", categorize_udf(col("age")))
+```
+
+### Pandas UDFs (Vectorized UDFs) — Preferred
+Pandas UDFs are **much faster** than regular Python UDFs because they use Apache Arrow for serialization and process data in batches.
+
+```python
+from pyspark.sql.functions import pandas_udf
+from pyspark.sql.types import StringType
+import pandas as pd
+
+@pandas_udf(StringType())
+def categorize_age_pd(ages: pd.Series) -> pd.Series:
+    return ages.apply(lambda a: "minor" if a < 18 else "adult" if a < 65 else "senior")
+
+df.withColumn("age_group", categorize_age_pd(col("age")))
+```
+
+### SQL UDFs (Unity Catalog)
+```sql
+-- Create a persistent SQL UDF in Unity Catalog
+CREATE OR REPLACE FUNCTION main.utils.age_group(age INT)
+RETURNS STRING
+RETURN CASE
+    WHEN age < 18 THEN 'minor'
+    WHEN age < 65 THEN 'adult'
+    ELSE 'senior'
+END;
+
+-- Use it
+SELECT name, main.utils.age_group(age) AS group FROM users;
+```
+
+### UDF Performance Comparison
+| Type | Speed | Serialization | When to Use |
+|---|---|---|---|
+| **Built-in functions** | ⚡ Fastest | None (native JVM) | Always prefer these |
+| **SQL UDF** | Fast | SQL execution | Reusable logic, stored in catalog |
+| **Pandas UDF** | Moderate | Arrow (columnar) | Complex Python logic on large data |
+| **Python UDF** | 🐢 Slowest | Row-by-row pickle | Avoid if possible |
+
+> 🔑 **Best practice:** Always prefer built-in Spark functions. Use UDFs only when built-ins can't do what you need.
+
+---
+
+## 2.11 `dbutils` — Databricks Utilities
+
+`dbutils` is Databricks-specific. Not available in standard Spark.
+
+### File System Utilities (`dbutils.fs`)
+```python
+# List files
+dbutils.fs.ls("/mnt/data/")
+dbutils.fs.ls("/Volumes/main/schema/volume/")
+
+# Copy a file
+dbutils.fs.cp("/mnt/src/file.csv", "/mnt/dst/file.csv")
+
+# Move a file
+dbutils.fs.mv("/mnt/src/file.csv", "/mnt/dst/file.csv")
+
+# Delete a file or directory
+dbutils.fs.rm("/mnt/old/", recurse=True)
+
+# Create directory
+dbutils.fs.mkdirs("/mnt/new_dir/")
+
+# Read a text file
+dbutils.fs.head("/mnt/data/file.txt", 1000)  # first 1000 bytes
+```
+
+### Secrets (`dbutils.secrets`)
+```python
+# Access secrets stored in Databricks Secret Scope
+password = dbutils.secrets.get(scope="my-scope", key="db-password")
+token = dbutils.secrets.get(scope="azure-kv", key="storage-account-key")
+
+# List scopes and secrets (won't reveal values)
+dbutils.secrets.listScopes()
+dbutils.secrets.list("my-scope")
+```
+
+### Notebook Utilities (`dbutils.notebook`)
+```python
+# Run another notebook and pass parameters
+result = dbutils.notebook.run("/path/to/notebook", timeout_seconds=300,
+                               arguments={"env": "prod", "date": "2024-01-15"})
+# Return a value from a notebook
+dbutils.notebook.exit("SUCCESS")
+```
+
+### Widgets (`dbutils.widgets`)
+```python
+# Create a text widget (parameter input)
+dbutils.widgets.text("date", "2024-01-01", "Processing Date")
+
+# Create a dropdown widget
+dbutils.widgets.dropdown("env", "dev", ["dev", "staging", "prod"], "Environment")
+
+# Get widget value
+date_val = dbutils.widgets.get("date")
+env_val = dbutils.widgets.get("env")
+
+# Remove widgets
+dbutils.widgets.remove("date")
+dbutils.widgets.removeAll()
+```
+
+---
+
+## 2.12 Updated Key Exam-Focus Points
+
+9. ✅ Know **narrow vs wide transformations** — wide = shuffle (groupBy, join, distinct, orderBy)
+10. ✅ Know **`spark.sql.shuffle.partitions`** — default 200; tune based on data size
+11. ✅ Know **AQE (Adaptive Query Execution)** — enabled by default; auto-coalesces shuffle partitions
+12. ✅ Know **`repartition()` vs `coalesce()`** — repartition shuffles, coalesce doesn't
+13. ✅ Know **partition pruning** — only works when filtering on the partitioned column
+14. ✅ Know **broadcast join** — use for small tables; avoids shuffle
+15. ✅ Know **UDF performance order**: built-in > SQL UDF > Pandas UDF > Python UDF
+16. ✅ Know **`dbutils.secrets`** for secure credential access, **`dbutils.widgets`** for notebook parameters
