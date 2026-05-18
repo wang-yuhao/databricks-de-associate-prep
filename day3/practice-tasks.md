@@ -271,3 +271,182 @@ Answer these without looking at notes:
 7. 30 days for log, 7 days for deleted data files
 
 </details>
+
+---
+
+## Task 8: Medallion Architecture — Bronze / Silver / Gold (30 min)
+
+The Medallion Architecture is a data design pattern used in Databricks Lakehouse to organize data into three layers of quality.
+
+**Concept:**
+- **Bronze**: Raw ingested data (as-is from source, no transformations)
+- **Silver**: Cleaned, validated, enriched data (deduplication, type casting, null handling)
+- **Gold**: Aggregated, business-ready data (KPIs, reports, ML features)
+
+```sql
+-- Cell 29: Create Bronze layer (raw ingested data)
+CREATE OR REPLACE TABLE workshop.bronze_sales
+USING DELTA AS
+SELECT
+  sale_id,
+  product,
+  region,
+  amount,
+  sale_date,
+  current_timestamp() AS ingested_at,
+  'source_system_A' AS source
+FROM workshop.sales;
+
+SELECT * FROM workshop.bronze_sales;
+```
+
+```sql
+-- Cell 30: Create Silver layer (cleaned + validated data)
+CREATE OR REPLACE TABLE workshop.silver_sales
+USING DELTA AS
+SELECT
+  sale_id,
+  UPPER(product) AS product,
+  UPPER(region) AS region,
+  CAST(amount AS DOUBLE) AS amount,
+  TO_DATE(sale_date, 'yyyy-MM-dd') AS sale_date,
+  ingested_at
+FROM workshop.bronze_sales
+WHERE sale_id IS NOT NULL
+  AND amount > 0;
+
+SELECT * FROM workshop.silver_sales;
+```
+
+```sql
+-- Cell 31: Create Gold layer (aggregated business metrics)
+CREATE OR REPLACE TABLE workshop.gold_sales_summary
+USING DELTA AS
+SELECT
+  region,
+  COUNT(*) AS total_transactions,
+  SUM(amount) AS total_revenue,
+  AVG(amount) AS avg_order_value,
+  MAX(sale_date) AS last_sale_date
+FROM workshop.silver_sales
+GROUP BY region
+ORDER BY total_revenue DESC;
+
+SELECT * FROM workshop.gold_sales_summary;
+```
+
+**Observe:** Each layer adds more quality and business value. Bronze = immutable raw, Silver = clean, Gold = aggregated.
+
+---
+
+## Task 9: COPY INTO — Idempotent Data Ingestion (20 min)
+
+`COPY INTO` is an idempotent, incremental file ingestion command — it only loads files that haven't been loaded yet.
+
+```python
+# Cell 32: Create sample CSV files to simulate source data
+import json
+dbutils.fs.mkdirs("/tmp/workshop/incoming/")
+
+# Write sample CSV data
+dbutils.fs.put("/tmp/workshop/incoming/sales_jan.csv",
+"""sale_id,product,region,amount,sale_date
+101,Alpha,EU,100.0,2024-01-05
+102,Beta,US,200.0,2024-01-06
+103,Gamma,EU,150.0,2024-01-07""", overwrite=True)
+```
+
+```sql
+-- Cell 33: Create target Delta table
+CREATE OR REPLACE TABLE workshop.ingested_sales (
+  sale_id BIGINT,
+  product STRING,
+  region STRING,
+  amount DOUBLE,
+  sale_date DATE
+) USING DELTA;
+```
+
+```sql
+-- Cell 34: Use COPY INTO to load the CSV file
+COPY INTO workshop.ingested_sales
+FROM '/tmp/workshop/incoming/'
+FILEFORMAT = CSV
+FORMAT_OPTIONS ('header' = 'true', 'inferSchema' = 'true')
+COPY_OPTIONS ('mergeSchema' = 'true');
+
+SELECT * FROM workshop.ingested_sales;
+```
+
+```sql
+-- Cell 35: Run COPY INTO again (same files) — should load 0 new rows (idempotent)
+COPY INTO workshop.ingested_sales
+FROM '/tmp/workshop/incoming/'
+FILEFORMAT = CSV
+FORMAT_OPTIONS ('header' = 'true', 'inferSchema' = 'true')
+COPY_OPTIONS ('mergeSchema' = 'true');
+
+-- Check row count — should still be 3
+SELECT COUNT(*) AS total_rows FROM workshop.ingested_sales;
+```
+
+**Observe:** `COPY INTO` tracks which files were already loaded. Re-running it does NOT duplicate rows.
+
+**Key differences vs INSERT INTO:**
+- `COPY INTO` = idempotent, file-tracking, incremental
+- `INSERT INTO` = always inserts, no deduplication
+
+---
+
+## Task 10: Liquid Clustering (10 min — Conceptual + Demo)
+
+Liquid Clustering replaces traditional `PARTITION BY` with a more flexible, automatic approach.
+
+```sql
+-- Cell 36: Create a table with Liquid Clustering
+CREATE OR REPLACE TABLE workshop.sales_clustered
+USING DELTA
+CLUSTER BY (region, sale_date)
+AS SELECT * FROM workshop.silver_sales;
+
+-- Inspect the table
+DESCRIBE DETAIL workshop.sales_clustered;
+```
+
+```sql
+-- Cell 37: Trigger clustering (in production, this runs automatically)
+OPTIMIZE workshop.sales_clustered;
+
+-- Check after optimize
+DESCRIBE HISTORY workshop.sales_clustered;
+```
+
+**Key facts for the exam:**
+- Liquid Clustering: flexible, no full rewrites needed when clustering keys change
+- Traditional partitioning: static, can cause small file problems with high-cardinality columns
+- Use `CLUSTER BY` instead of `PARTITION BY` for most new tables
+
+---
+
+## ✅ Checkpoint Quiz — Extended
+
+Answer these without looking at notes:
+
+1. What are the three layers of the Medallion Architecture?
+2. What type of data goes into the Bronze layer?
+3. What does `COPY INTO` do when you run it a second time with the same files?
+4. How is `COPY INTO` different from `INSERT INTO`?
+5. What clause replaces `PARTITION BY` in Liquid Clustering?
+6. When should you use Silver layer vs Gold layer?
+
+<details>
+<summary>Answers</summary>
+
+1. Bronze (raw), Silver (cleaned), Gold (aggregated/business-ready)
+2. Raw, unmodified data as-is from the source system
+3. It loads 0 new rows — it's idempotent and tracks already-loaded files
+4. `COPY INTO` is idempotent and file-tracking; `INSERT INTO` always inserts all rows
+5. `CLUSTER BY`
+6. Silver = cleaned/validated data for analysts/data scientists; Gold = aggregated KPIs for dashboards/reports
+
+</details>
