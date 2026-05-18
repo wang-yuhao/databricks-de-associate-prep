@@ -394,3 +394,130 @@ GROUP BY customer_id;
 | Hardcode credentials in notebooks | Always use `dbutils.secrets.get()` |
 | External table in UC managed storage | External tables need explicit `LOCATION` outside metastore |
 | `@dlt.expect()` drops rows | `expect()` only warns; use `expect_or_drop()` to drop |
+
+
+---
+
+## MEDALLION ARCHITECTURE
+
+| Layer | Purpose | Data Quality | Typical Operations |
+|---|---|---|---|
+| **Bronze** | Raw ingestion | As-is from source | COPY INTO, Auto Loader |
+| **Silver** | Cleaned & validated | Deduplicated, typed | Filters, casts, MERGE |
+| **Gold** | Business-ready | Aggregated KPIs | GROUP BY, JOIN, Window |
+
+```sql
+-- Bronze: ingest raw
+CREATE OR REPLACE TABLE catalog.bronze.events
+USING DELTA AS
+SELECT *, current_timestamp() AS ingested_at FROM raw_source;
+
+-- Silver: clean and validate
+CREATE OR REPLACE TABLE catalog.silver.events
+USING DELTA AS
+SELECT id, UPPER(name) AS name, CAST(amount AS DOUBLE) AS amount
+FROM catalog.bronze.events
+WHERE id IS NOT NULL AND amount > 0;
+
+-- Gold: aggregate for BI
+CREATE OR REPLACE TABLE catalog.gold.revenue_by_region
+USING DELTA AS
+SELECT region, SUM(amount) AS total_revenue
+FROM catalog.silver.events
+GROUP BY region;
+```
+
+---
+
+## COPY INTO (Idempotent Ingestion)
+
+```sql
+-- Loads only NEW files (idempotent)
+COPY INTO target_table
+FROM '/path/to/files/'
+FILEFORMAT = CSV
+FORMAT_OPTIONS ('header' = 'true', 'inferSchema' = 'true')
+COPY_OPTIONS ('mergeSchema' = 'true');
+```
+
+| Feature | COPY INTO | INSERT INTO |
+|---|---|---|
+| Idempotent | Yes (tracks loaded files) | No |
+| Re-run safe | Yes (no duplicates) | No (duplicates data) |
+| Incremental | Yes | No |
+| Best for | File-based ingestion | Computed data |
+
+---
+
+## SPARK SHUFFLE & PARTITIONING
+
+```python
+# Check current partitions
+print(df.rdd.getNumPartitions())
+
+# Repartition (causes shuffle — use for balancing before writes)
+df_balanced = df.repartition(8)
+df_by_col = df.repartition(8, "region")  # hash-partition by column
+
+# Coalesce (no shuffle — only reduces partitions)
+df_small = df.coalesce(2)
+
+# Broadcast join (avoids shuffle for small tables)
+from pyspark.sql.functions import broadcast
+df_joined = large_df.join(broadcast(small_df), "id")
+
+# AQE (Adaptive Query Execution) — enabled by default in DBR
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+```
+
+| Operation | Causes Shuffle? | Notes |
+|---|---|---|
+| `repartition(n)` | Yes | Full data reshuffle |
+| `coalesce(n)` | No | Only reduces partitions |
+| `groupBy().agg()` | Yes | Heavy shuffle operation |
+| `join()` (large+large) | Yes | Use broadcast for small tables |
+| `broadcast(df)` | No | Small table replicated to all nodes |
+| `sortWithinPartitions` | No | Sort within each partition only |
+
+---
+
+## PHOTON ENGINE & SERVERLESS COMPUTE
+
+### Photon Engine
+- Vectorized C++ query engine built into Databricks
+- Accelerates SQL, aggregations, joins, scans — **no code changes needed**
+- Enabled via Photon-runtime clusters (DBR suffix `-photon`)
+- NOT available in Community Edition
+- Best for: BI/SQL workloads, large ETL aggregations
+- NOT beneficial for: pure streaming, ML training
+
+```python
+# Check if Photon is enabled (paid workspace)
+spark.conf.get("spark.databricks.photon.enabled")  # "true" or "false"
+```
+
+### Serverless Compute
+| Feature | Classic Cluster | Serverless |
+|---|---|---|
+| Startup time | 5-10 minutes | < 5 seconds |
+| Management | Manual config | Fully managed |
+| Idle cost | Yes (billed) | No idle cost |
+| Scaling | Manual/auto-scale | Automatic |
+| Use case | Flexible workloads | SQL, BI, Jobs |
+
+**Billing:** Serverless = per-second DBU consumption (no idle billing)
+
+---
+
+## EXAM TRAPS — EXTENDED
+
+| ❌ Wrong | ✅ Correct |
+|---|---|
+| Bronze = cleaned data | Bronze = raw as-is, Silver = cleaned |
+| `COPY INTO` duplicates on re-run | `COPY INTO` is idempotent (tracks files) |
+| Use `PARTITION BY` for all tables | Use `CLUSTER BY` (Liquid Clustering) for most new tables |
+| Photon needs code changes | Photon is transparent — no code changes |
+| `coalesce()` causes shuffle | `coalesce()` avoids shuffle; `repartition()` causes shuffle |
+| Serverless has same startup as classic | Serverless starts in < 5 seconds |
+| UDFs are faster than built-in functions | Built-in functions are always faster (Photon-optimized) |
