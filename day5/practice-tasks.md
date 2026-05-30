@@ -1,329 +1,700 @@
 # Day 5 — Practice Tasks: DLT, Workflows & CI/CD
 
-> **Environment:** Databricks Community Edition (free) at [community.cloud.databricks.com](https://community.cloud.databricks.com)
-> 
-> ⚠️ **Note:** DLT is not available in Community Edition. Use the notebook simulation tasks (Tasks 1-3) to practice DLT syntax. For real DLT testing, use a 14-day free trial workspace.
+> **Environment:** Full production Databricks workspace (Azure / AWS / GCP)
+> **Requirements:** Unity Catalog enabled workspace, ADLS Gen2 or S3 storage, DLT-capable tier (Pro or Advanced for CDC tasks)
+>
+> All tasks below run directly in your production workspace. There are no simulations.
 
 ---
 
-## 🛠️ Setup (5 minutes)
+## 🛠️ Setup (10 minutes)
 
-1. Open your Community Edition workspace
-2. Create a new cluster (Runtime 13.3 LTS or higher)
-3. Create a new notebook: `day5_dlt_workflows`
-4. Set language to Python
+### Step 1: Create a test storage path
 
----
+If you are on Azure, create a container called `dlt-lab` in your ADLS Gen2 account and note:
+- Storage account name: `<your-storage-account>`
+- Container: `dlt-lab`
+- Full path pattern: `abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/`
 
-## Task 1 — DLT Syntax Validation (30 min)
+If you are on AWS, use an S3 path: `s3://your-bucket/dlt-lab/`
 
-**Goal:** Practice writing DLT-style code and understand the patterns.
+### Step 2: Create a Unity Catalog schema for this lab
 
-**Step 1:** Create a notebook that simulates what a DLT pipeline would do, using regular Spark (since DLT isn't available in Community Edition):
+Run the following in a SQL notebook or the SQL Editor:
+
+```sql
+-- Create a lab catalog (skip if using an existing catalog)
+CREATE CATALOG IF NOT EXISTS lab_catalog
+  COMMENT 'Sandbox catalog for DE associate exam practice';
+
+-- Create a schema for Day 5 work
+CREATE SCHEMA IF NOT EXISTS lab_catalog.day5_dlt
+  COMMENT 'Day 5 DLT and Workflows practice';
+
+-- Confirm
+SHOW SCHEMAS IN lab_catalog;
+```
+
+### Step 3: Upload sample landing data
+
+In a Python notebook on any cluster, generate test data in your landing zone:
 
 ```python
-# === SIMULATE DLT PIPELINE IN REGULAR SPARK ===
-# In a real DLT pipeline, replace spark.read/write with @dlt.table decorators
-
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, DateType
-from datetime import date
+from pyspark.sql.types import *
+import random
 
-# ─── Sample data mimicking raw ingestion ───
-raw_data = [
-    ("ORD001", "2024-01-15", "C001", 150.00, "completed"),
-    ("ORD002", "2024-01-16", "C002", -50.00, "completed"),   # bad: negative amount
-    (None,    "2024-01-17", "C003",  75.00, "pending"),     # bad: null order_id
+# Generate sample orders JSON
+orders_data = [
+    ("ORD001", "2024-01-15", "C001",  150.00, "completed"),
+    ("ORD002", "2024-01-16", "C002",  -50.00, "completed"),  # bad: negative amount
+    (None,     "2024-01-17", "C003",   75.00, "pending"),    # bad: null order_id
     ("ORD004", "2024-01-18", "C004",  200.00, "completed"),
-    ("ORD005", "2019-12-31", "C005",  90.00, "completed"),   # bad: date too old
+    ("ORD005", "2019-12-31", "C005",   90.00, "completed"),  # bad: date too old
     ("ORD006", "2024-01-20", "C001",  310.00, "cancelled"),
+    ("ORD007", "2024-02-01", "C002",  450.00, "completed"),
+    ("ORD008", "2024-02-03", "C003",  125.00, "completed"),
 ]
 
 schema = StructType([
-    StructField("order_id", StringType()),
-    StructField("order_date", StringType()),
+    StructField("order_id",    StringType()),
+    StructField("order_date",  StringType()),
     StructField("customer_id", StringType()),
-    StructField("amount", DoubleType()),
-    StructField("status", StringType()),
+    StructField("amount",      DoubleType()),
+    StructField("status",      StringType()),
 ])
 
-df_raw = spark.createDataFrame(raw_data, schema)
-print("=== Raw Bronze data ===")
-df_raw.show()
+df = spark.createDataFrame(orders_data, schema)
+
+# Write to your landing zone as JSON (Auto Loader will pick this up)
+LANDING_PATH = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/orders/"
+SCHEMA_PATH  = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/checkpoints/orders_schema/"
+
+df.write.mode("overwrite").json(LANDING_PATH)
+print(f"Wrote {df.count()} rows to {LANDING_PATH}")
 ```
-
-**Step 2:** Apply DLT-style expectations (simulate with filter logic):
-
-```python
-# ─── Simulate DLT Expectations ───
-# In DLT: @dlt.expect_or_drop("valid_amount", "amount > 0")
-# In DLT: @dlt.expect_or_drop("valid_order_id", "order_id IS NOT NULL")
-# In DLT: @dlt.expect("valid_date", "order_date >= '2020-01-01'")  -- WARN only
-
-# Count violations before dropping
-violations_amount = df_raw.filter(~(F.col("amount") > 0)).count()
-violations_null   = df_raw.filter(F.col("order_id").isNull()).count()
-violations_date   = df_raw.filter(F.col("order_date") < "2020-01-01").count()
-
-print(f"Expectation 'valid_amount' violations (DROP): {violations_amount}")
-print(f"Expectation 'valid_order_id' violations (DROP): {violations_null}")
-print(f"Expectation 'valid_date' violations (WARN): {violations_date}")
-
-# Silver layer — apply DROP rules, keep WARN rows but log
-df_silver = (
-    df_raw
-    .filter(F.col("order_id").isNotNull())      # DROP rule
-    .filter(F.col("amount") > 0)               # DROP rule
-    .withColumn("order_date", F.to_date(F.col("order_date")))
-)
-
-print("\n=== Silver layer after applying expectations ===")
-df_silver.show()
-print(f"Rows before: {df_raw.count()}, Rows after: {df_silver.count()}")
-```
-
-**Step 3:** Write DLT-style SQL for the same pipeline:
-
-```sql
--- In a DLT notebook (SQL), this would be:
-
--- Bronze
--- CREATE OR REFRESH STREAMING TABLE raw_orders
--- COMMENT 'Raw orders from landing zone'
--- AS SELECT * FROM cloud_files("/mnt/landing/orders", "json",
---   map("cloudFiles.inferColumnTypes", "true"))
-
--- Silver
--- CREATE OR REFRESH MATERIALIZED VIEW silver_orders
---   CONSTRAINT valid_amount   EXPECT (amount > 0)              ON VIOLATION DROP ROW,
---   CONSTRAINT valid_order_id EXPECT (order_id IS NOT NULL)    ON VIOLATION DROP ROW,
---   CONSTRAINT recent_date    EXPECT (order_date >= '2020-01-01')
--- AS SELECT
---   order_id,
---   CAST(order_date AS DATE) AS order_date,
---   customer_id,
---   amount,
---   status
--- FROM LIVE.raw_orders
-
--- Gold
--- CREATE LIVE VIEW customer_summary
--- AS SELECT
---   customer_id,
---   COUNT(*) AS total_orders,
---   SUM(amount) AS total_spend,
---   MAX(order_date) AS last_order_date
--- FROM LIVE.silver_orders
--- WHERE status = 'completed'
--- GROUP BY customer_id
-```
-
-**✅ Check:** Can you explain the difference between STREAMING TABLE vs MATERIALIZED VIEW vs LIVE VIEW?
 
 ---
 
-## Task 2 — DLT CDC Pattern (20 min)
+## Task 1 — Build a Real DLT Pipeline: Bronze → Silver → Gold (45 min)
 
-**Goal:** Understand the `APPLY CHANGES INTO` CDC pattern.
+**Goal:** Create and run a production DLT pipeline with all three medallion layers, data quality expectations, and Unity Catalog as the target.
+
+### Step 1: Create a DLT notebook
+
+Create a new notebook in your Databricks workspace (e.g., `/Repos/<you>/day5-lab/dlt_orders_pipeline`).
+Set the default language to **Python**.
+
+Paste and review each cell below — do **not** run this notebook directly. It is attached to a DLT pipeline.
 
 ```python
-# Simulate CDC (Change Data Feed) processing
-# In DLT, APPLY CHANGES INTO handles this automatically
+# Cell 1 — Imports
+import dlt
+from pyspark.sql.functions import col, to_date, current_timestamp
 
-# Source: CDC events (inserts, updates, deletes)
-cdc_events = [
-    (1, "Alice",  "alice@a.com",  "INSERT",  "2024-01-01 10:00:00"),
-    (2, "Bob",    "bob@b.com",    "INSERT",  "2024-01-01 10:01:00"),
-    (1, "Alice",  "alice2@a.com", "UPDATE",  "2024-01-01 11:00:00"),  # email changed
-    (3, "Carol",  "carol@c.com",  "INSERT",  "2024-01-01 11:30:00"),
-    (2, None,     None,           "DELETE",  "2024-01-01 12:00:00"),  # Bob deleted
+LANDING_PATH = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/orders/"
+SCHEMA_PATH  = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/checkpoints/orders_schema/"
+```
+
+```python
+# Cell 2 — BRONZE: Auto Loader streaming ingest
+@dlt.table(
+    name    = "raw_orders",
+    comment = "Bronze: raw orders ingested from ADLS Gen2 landing zone via Auto Loader",
+    table_properties = {
+        "quality": "bronze",
+        "pipelines.reset.allowed": "false"  # prevent accidental full refresh in prod
+    }
+)
+def raw_orders():
+    return (
+        spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format",           "json")
+        .option("cloudFiles.inferColumnTypes",  "true")
+        .option("cloudFiles.schemaLocation",    SCHEMA_PATH)
+        .option("cloudFiles.schemaEvolutionMode", "rescue")  # unknown cols go to _rescued_data
+        .load(LANDING_PATH)
+    )
+```
+
+```python
+# Cell 3 — SILVER: Expectations enforce data quality
+@dlt.table(
+    name    = "clean_orders",
+    comment = "Silver: validated and type-cast orders",
+    table_properties = {"quality": "silver"}
+)
+@dlt.expect_or_fail("no_null_order_id",  "order_id IS NOT NULL")      # FAIL  — stops pipeline
+@dlt.expect_or_drop("positive_amount",   "amount > 0")                # DROP  — removes bad rows
+@dlt.expect("recent_date",               "order_date >= '2020-01-01'") # WARN  — logs, keeps rows
+def clean_orders():
+    return (
+        dlt.read_stream("raw_orders")
+        .withColumn("order_date",  to_date(col("order_date")))
+        .withColumn("amount",      col("amount").cast("decimal(10,2)"))
+        .withColumn("ingested_at", current_timestamp())
+        .select("order_id", "order_date", "customer_id", "amount", "status", "ingested_at")
+    )
+```
+
+```python
+# Cell 4 — GOLD: Materialized View for analytics
+@dlt.table(
+    name    = "customer_order_summary",
+    comment = "Gold: per-customer order summary — refreshed on each pipeline run",
+    table_properties = {"quality": "gold"}
+)
+def customer_order_summary():
+    # Use dlt.read() (batch read) for the gold layer — no streaming needed
+    return (
+        dlt.read("clean_orders")
+        .where(col("status") == "completed")
+        .groupBy("customer_id")
+        .agg(
+            F.count("*").alias("total_orders"),
+            F.sum("amount").alias("total_spend"),
+            F.max("order_date").alias("last_order_date")
+        )
+    )
+```
+
+### Step 2: Create and configure the DLT pipeline
+
+1. Navigate to **Workflows → Delta Live Tables → Create Pipeline**
+2. Fill in:
+   - **Pipeline name:** `orders_pipeline_lab`
+   - **Product edition:** Advanced
+   - **Pipeline mode:** Triggered
+   - **Source code:** path to your DLT notebook above
+   - **Target schema:** `lab_catalog.day5_dlt`
+   - **Storage location:** `abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/dlt_storage/`
+   - **Cluster:** 1 driver + 1 worker (minimum for lab)
+   - **Photon:** Enable (checkbox)
+   - **Channel:** Current
+3. Click **Start** to run the pipeline
+
+### Step 3: Verify results
+
+After the pipeline completes, run these queries in the SQL Editor:
+
+```sql
+-- Check all three layers exist
+SHOW TABLES IN lab_catalog.day5_dlt;
+
+-- Bronze: all 8 rows
+SELECT COUNT(*) FROM lab_catalog.day5_dlt.raw_orders;
+
+-- Silver: 6 rows (1 null order_id = FAIL stops pipeline BEFORE this... 
+-- so in practice remove the FAIL expectation from clean_orders for this test,
+-- or fix the data. Switch to WARN to see DROP-only behavior.)
+SELECT * FROM lab_catalog.day5_dlt.clean_orders ORDER BY order_id;
+
+-- Gold: only 'completed' orders grouped by customer
+SELECT * FROM lab_catalog.day5_dlt.customer_order_summary ORDER BY total_spend DESC;
+```
+
+### Step 4: Inspect the Data Quality tab
+
+In the DLT pipeline UI → **Data Quality** tab:
+- You should see pass/fail counts for each expectation
+- `positive_amount`: 1 violation (ORD002, amount = -50)
+- `recent_date`: 1 warning (ORD005, date in 2019)
+
+**✅ Check:** Can you explain why `dlt.read_stream()` is used in the Silver layer but `dlt.read()` is used in the Gold layer?
+
+---
+
+## Task 2 — CDC with APPLY CHANGES INTO (30 min)
+
+**Goal:** Build a DLT CDC pipeline that maintains current customer state using SCD Type 1 and SCD Type 2.
+
+### Step 1: Generate CDC source data
+
+In a regular Python notebook, write CDC events to ADLS:
+
+```python
+from pyspark.sql import functions as F
+from pyspark.sql.types import *
+
+# CDC events: id, name, email, operation, updated_at
+cdc_data = [
+    (1, "Alice",  "alice@a.com",   "INSERT",  "2024-01-01 10:00:00"),
+    (2, "Bob",    "bob@b.com",     "INSERT",  "2024-01-01 10:01:00"),
+    (1, "Alice",  "alice2@a.com",  "UPDATE",  "2024-01-01 11:00:00"),  # email changed
+    (3, "Carol",  "carol@c.com",   "INSERT",  "2024-01-01 11:30:00"),
+    (2, None,     None,            "DELETE",  "2024-01-01 12:00:00"),  # Bob deleted
 ]
 
-from pyspark.sql.types import LongType, TimestampType
+cdc_schema = StructType([
+    StructField("id",         LongType()),
+    StructField("name",       StringType()),
+    StructField("email",      StringType()),
+    StructField("operation",  StringType()),
+    StructField("updated_at", TimestampType()),
+])
 
-cdc_schema = "id LONG, name STRING, email STRING, operation STRING, event_time TIMESTAMP"
-df_cdc = spark.createDataFrame(cdc_events).toDF("id", "name", "email", "operation", "event_time")
-
-print("=== CDC Events Stream ===")
-df_cdc.show(truncate=False)
-
-# Simulate APPLY CHANGES INTO logic:
-# 1. Rank rows by event_time per id
-# 2. Keep only the latest record per id
-# 3. Remove DELETEs from output
-from pyspark.sql.window import Window
-
-window = Window.partitionBy("id").orderBy(F.desc("event_time"))
-df_latest = (
-    df_cdc
-    .withColumn("rank", F.rank().over(window))
-    .filter(F.col("rank") == 1)
-    .filter(F.col("operation") != "DELETE")
-    .select("id", "name", "email", "event_time")
-)
-
-print("=== Resulting Target Table (after CDC merge) ===")
-df_latest.show()
+CDC_PATH = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/cdc_customers/"
+df_cdc = spark.createDataFrame(cdc_data, cdc_schema)
+df_cdc = df_cdc.withColumn("updated_at", F.to_timestamp("updated_at"))
+df_cdc.write.mode("overwrite").json(CDC_PATH)
+print(f"Written {df_cdc.count()} CDC events to {CDC_PATH}")
 ```
 
-**DLT CDC SQL (for reference):**
-```sql
--- In a real DLT pipeline:
--- CREATE OR REFRESH STREAMING TABLE customers;
+### Step 2: Create the CDC DLT notebook
 
--- APPLY CHANGES INTO LIVE.customers
--- FROM STREAM(LIVE.cdc_events)
--- KEYS (id)
--- APPLY AS DELETE WHEN operation = 'DELETE'
--- SEQUENCE BY event_time
--- COLUMNS * EXCEPT (operation, event_time)
-```
-
----
-
-## Task 3 — Workflows Simulation (20 min)
-
-**Goal:** Understand how to structure multi-task jobs.
-
-**Exercise — Design a Job:**
-
-You have these tasks in a data pipeline:
-1. `ingest_raw` — loads CSV files from landing zone
-2. `validate_schema` — checks schema correctness
-3. `transform_silver` — cleans and enriches data
-4. `aggregate_gold` — builds aggregate tables
-5. `send_report` — sends email with row counts
-6. `notify_failure` — sends alert if any step fails
-
-**Draw the DAG (write it out):**
-```
-# Your answer:
-# ingest_raw → validate_schema → transform_silver → aggregate_gold → send_report
-#                    ↓                                        ↓
-#             notify_failure                          notify_failure
-# (run_if: AT_LEAST_ONE_FAILED for notify_failure from any upstream)
-```
-
-**Step 2 — Understand task values:**
+Create a new DLT notebook (`dlt_customers_cdc`):
 
 ```python
-# Task 1: ingest_raw — counts records and passes to next task
-def ingest_raw():
-    # Simulate ingestion
-    record_count = 5000
-    dbutils.jobs.taskValues.set(key="record_count", value=record_count)
-    print(f"Ingested {record_count} records")
-    return record_count
+# Cell 1 — Bronze: ingest CDC events
+import dlt
+from pyspark.sql.functions import col
 
-# Run it
-count = ingest_raw()
+CDC_PATH    = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/cdc_customers/"
+CHECK_PATH  = "abfss://dlt-lab@<your-storage-account>.dfs.core.windows.net/checkpoints/cdc_schema/"
 
-# Task 2: validate_schema — picks up from task 1
-# In a real workflow, this would be:
-# count = dbutils.jobs.taskValues.get(taskKey="ingest_raw", key="record_count", default=0)
-# For testing purposes:
-count = 5000
-
-if count == 0:
-    raise ValueError("No records ingested — aborting pipeline")
-
-print(f"Validation passed: {count} records to process")
+@dlt.table(comment="Bronze CDC events from source system")
+def bronze_customers_cdc():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format",        "json")
+        .option("cloudFiles.inferColumnTypes", "true")
+        .option("cloudFiles.schemaLocation", CHECK_PATH)
+        .load(CDC_PATH)
+    )
 ```
 
-**Step 3 — Repair run concept quiz:**
+```python
+# Cell 2 — Silver SCD Type 1: current state only (overwrites on UPDATE)
+dlt.create_streaming_table(
+    name    = "silver_customers_scd1",
+    comment = "Current customer state — SCD Type 1 (no history)"
+)
+
+dlt.apply_changes(
+    target             = "silver_customers_scd1",
+    source             = "bronze_customers_cdc",
+    keys               = ["id"],
+    sequence_by        = col("updated_at"),
+    apply_as_deletes   = col("operation") == "DELETE",
+    except_column_list = ["operation", "updated_at"],
+    stored_as_scd_type = 1
+)
 ```
-Q: A 5-task job has tasks: [A → B → C → D → E]
-   Tasks A, B, C succeeded. Task D failed. Task E was skipped.
-   
-   If you do a Repair Run:
-   - Which tasks re-run? D and E
-   - Which tasks are skipped? A, B, C (already succeeded)
-   - What data is preserved? All outputs from A, B, C
+
+```python
+# Cell 3 — Silver SCD Type 2: full history (inserts new row on UPDATE)
+dlt.create_streaming_table(
+    name    = "silver_customers_scd2",
+    comment = "Customer history — SCD Type 2 (full audit trail via __START_AT / __END_AT)"
+)
+
+dlt.apply_changes(
+    target             = "silver_customers_scd2",
+    source             = "bronze_customers_cdc",
+    keys               = ["id"],
+    sequence_by        = col("updated_at"),
+    apply_as_deletes   = col("operation") == "DELETE",
+    except_column_list = ["operation"],
+    stored_as_scd_type = 2  # adds __START_AT and __END_AT columns
+)
 ```
+
+### Step 3: Create a new DLT pipeline for CDC
+
+Repeat the pipeline creation from Task 1, but point to the `dlt_customers_cdc` notebook.
+After it runs, verify:
+
+```sql
+-- SCD1: Alice should have updated email; Bob should be gone
+SELECT * FROM lab_catalog.day5_dlt.silver_customers_scd1 ORDER BY id;
+
+-- SCD2: Alice should have TWO rows (original + updated), Bob should be gone
+SELECT id, name, email, __START_AT, __END_AT
+FROM lab_catalog.day5_dlt.silver_customers_scd2
+ORDER BY id, __START_AT;
+```
+
+**Expected SCD2 output for Alice:**
+```
+id | name  | email         | __START_AT          | __END_AT
+ 1 | Alice | alice@a.com   | 2024-01-01 10:00:00 | 2024-01-01 11:00:00
+ 1 | Alice | alice2@a.com  | 2024-01-01 11:00:00 | null   <-- current record
+```
+
+**✅ Check:** Why does `APPLY CHANGES INTO` require DLT Pro or Advanced edition, and what would you use instead if you needed CDC outside of DLT?
 
 ---
 
-## Task 4 — DABs YAML Comprehension (15 min)
+## Task 3 — Build a Multi-Task Workflow (30 min)
 
-**Goal:** Read and understand a DABs configuration.
+**Goal:** Create a real Lakeflow Job with task dependencies, task values, and repair run practice.
 
-**Exercise — Read this bundle YAML and answer questions:**
+### Step 1: Create the task notebooks
+
+**Notebook 1: `task_ingest`**
+```python
+# Simulates ingestion and passes record count to downstream tasks
+record_count = spark.table("lab_catalog.day5_dlt.raw_orders").count()
+
+dbutils.jobs.taskValues.set(key="record_count", value=int(record_count))
+dbutils.jobs.taskValues.set(key="run_date",     value=str(spark.sql("SELECT current_date()").collect()[0][0]))
+
+print(f"[ingest] Records available: {record_count:,}")
+```
+
+**Notebook 2: `task_validate`**
+```python
+# Reads task value from ingest task and validates
+count = dbutils.jobs.taskValues.get(
+    taskKey    = "task_ingest",
+    key        = "record_count",
+    default    = 0,
+    debugValue = 999  # used only in interactive runs
+)
+
+if count == 0:
+    raise ValueError("Validation failed: no records found from ingest task")
+
+print(f"[validate] {count:,} records passed validation")
+```
+
+**Notebook 3: `task_report`**
+```python
+# Reads both task values and prints a run summary
+count    = dbutils.jobs.taskValues.get(taskKey="task_ingest", key="record_count", default=0)
+run_date = dbutils.jobs.taskValues.get(taskKey="task_ingest", key="run_date",     default="unknown")
+
+print(f"[report] Run date: {run_date} | Records processed: {count:,}")
+```
+
+**Notebook 4: `task_alert`**
+```python
+# This task runs on ANY_FAILED condition — simulates alerting
+print("[alert] A pipeline task failed. Sending notification...")
+# In production: call a webhook or Databricks SQL Alert here
+raise Exception("Alert task triggered — this is expected on failure path")
+```
+
+### Step 2: Create the Job
+
+1. Navigate to **Workflows → Create Job**
+2. Set the job name: `day5_lab_pipeline`
+3. Add tasks in this order with these dependencies:
+
+```
+task_ingest → task_validate → task_report
+                    ↓
+              task_alert  (run condition: AT_LEAST_ONE_FAILED)
+```
+
+For each task:
+- **Type:** Notebook
+- **Cluster:** Job cluster (new cluster per run) with DBR 15.4 LTS
+- **Parameters:** none needed (task values are used instead)
+
+4. Add a **schedule**: every weekday at 06:00 Europe/Berlin
+   - Quartz cron: `0 0 6 ? * MON-FRI *`
+   - Timezone: `Europe/Berlin`
+
+### Step 3: Test Repair Run
+
+1. Temporarily introduce a failure in `task_validate` (e.g., change `count == 0` to `count > 0`)
+2. Run the job manually — task_validate should fail, task_report should be skipped
+3. Fix the notebook
+4. In the job run history, click **Repair Run**
+5. Observe that only task_validate and task_report re-run — task_ingest is skipped
+
+**✅ Check:** What is the difference between `AT_LEAST_ONE_FAILED` and `ALL_DONE` task run conditions? Give an example of when you would use each.
+
+---
+
+## Task 4 — Databricks Asset Bundles (DABs) Hands-On (30 min)
+
+**Goal:** Create, deploy, and run a real DABs bundle using the Databricks CLI v2.
+
+### Step 1: Install the Databricks CLI v2
+
+```bash
+# macOS (Homebrew)
+brew tap databricks/tap
+brew install databricks
+
+# Linux / WSL
+curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+# Verify
+databricks --version
+# Expected: Databricks CLI v0.200+
+```
+
+### Step 2: Authenticate
+
+```bash
+# OAuth (recommended for human users)
+databricks auth login --host https://adb-<workspace-id>.azuredatabricks.net
+
+# Or PAT (for CI/CD service principals)
+export DATABRICKS_HOST=https://adb-<workspace-id>.azuredatabricks.net
+export DATABRICKS_TOKEN=<your-pat>
+```
+
+### Step 3: Initialize a bundle
+
+```bash
+mkdir day5-bundle && cd day5-bundle
+databricks bundle init
+# Choose: default-python template
+# Enter project name: day5_orders_lab
+```
+
+### Step 4: Edit `databricks.yml`
+
+Replace the generated content with:
 
 ```yaml
 bundle:
-  name: retail_analytics
-
-variables:
-  env:
-    description: Deployment environment
-    default: dev
+  name: day5_orders_lab
 
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      host: https://adb-dev.azuredatabricks.net
-    variables:
-      env: dev
+      host: https://adb-<workspace-id>.azuredatabricks.net
 
   prod:
     mode: production
     workspace:
-      host: https://adb-prod.azuredatabricks.net
-    variables:
-      env: prod
+      host: https://adb-<workspace-id>.azuredatabricks.net
     run_as:
-      service_principal_name: sp-retail-prod@company.com
+      # Replace with your service principal application ID
+      service_principal_name: sp-day5-prod@company.com
 
 resources:
   jobs:
-    daily_pipeline:
-      name: retail_daily_${var.env}
+    day5_orders_job:
+      name: day5_orders_lab_${bundle.target}
       schedule:
-        quartz_cron_expression: "0 0 6 * * ?"
+        quartz_cron_expression: "0 0 6 ? * MON-FRI *"
         timezone_id: "Europe/Berlin"
+        pause_status: PAUSED  # safe default — don't auto-run on deploy
       tasks:
         - task_key: ingest
           notebook_task:
-            notebook_path: ./src/ingest.py
+            notebook_path: ./src/notebooks/task_ingest.py
           job_cluster_key: main_cluster
-        - task_key: transform
+        - task_key: validate
           depends_on:
             - task_key: ingest
           notebook_task:
-            notebook_path: ./src/transform.py
+            notebook_path: ./src/notebooks/task_validate.py
           job_cluster_key: main_cluster
       job_clusters:
         - job_cluster_key: main_cluster
           new_cluster:
-            spark_version: "13.3.x-scala2.12"
-            num_workers: 2
+            spark_version: "15.4.x-scala2.12"
+            node_type_id:  "Standard_DS3_v2"   # Azure; change for AWS/GCP
+            num_workers:   2
+            spark_conf:
+              spark.databricks.delta.preview.enabled: "true"
 ```
 
-**Questions (answer in your notebook as comments):**
-1. What time does this job run, and in which timezone?
-2. In `dev` mode, does it create a new cluster or reuse an existing one?
-3. What user/principal runs the job in production?
-4. What is the dependency between `ingest` and `transform`?
-5. How would you deploy this to production? (CLI command)
+### Step 5: Deploy and run
 
-**Answers:**
+```bash
+# Validate the bundle config before deploying
+databricks bundle validate --target dev
+
+# Deploy to dev (creates/updates the job in the workspace)
+databricks bundle deploy --target dev
+
+# Confirm the job appears in the UI, then run it
+databricks bundle run --target dev day5_orders_job
+
+# Check run status
+databricks bundle run --target dev day5_orders_job --no-wait
+```
+
+### Step 6: Compare dev vs prod deployment
+
+```bash
+# Deploy to prod (uses mode: production — note the run_as service principal)
+databricks bundle deploy --target prod
+
+# Observe in the UI: prod job has [dev <you>] prefix REMOVED
+# In dev: "[dev yuhao] day5_orders_lab_dev"
+# In prod: "day5_orders_lab_prod"
+```
+
+**✅ Check questions:**
+1. What does `mode: development` add to the job name, and why?
+2. Why is `pause_status: PAUSED` a safe default for scheduled jobs on deploy?
+3. What is the difference between `databricks bundle deploy` and `databricks bundle run`?
+
 ```python
-# 1. Every day at 06:00 CET (Europe/Berlin timezone)
-# 2. In development mode, Databricks reuses existing clusters for faster iteration
-#    In production mode, a NEW cluster is created per run for isolation
-# 3. Service principal: sp-retail-prod@company.com
-# 4. transform depends on ingest — ingest must succeed before transform starts
-# 5. databricks bundle deploy --target prod
-print("Answers confirmed!")
+# Answers
+# 1. mode: development prepends "[dev <username>]" to resource names to namespace
+#    dev deployments from prod — multiple developers can deploy without overwriting each other
+# 2. PAUSED prevents the schedule from firing automatically on first deploy,
+#    giving you a chance to validate before enabling
+# 3. deploy = create/update the job definition in the workspace
+#    run    = trigger an immediate run of the deployed job
+print("Answers confirmed")
 ```
 
 ---
 
-## Task 5 — Knowledge Check Quiz (15 min)
+## Task 5 — DLT Event Log Monitoring (20 min)
 
-Answer these exam-style questions. Check answers at the bottom.
+**Goal:** Query the DLT event log to monitor pipeline health and expectation metrics.
+
+### Step 1: Get your pipeline ID
+
+In the DLT UI for your `orders_pipeline_lab` pipeline:
+- Settings → copy the **Pipeline ID** (format: `aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`)
+
+### Step 2: Query the event log
+
+In a SQL notebook:
+
+```sql
+-- Replace <pipeline-id> with your actual pipeline ID
+
+-- 1. View all recent events
+SELECT timestamp, event_type, level, message
+FROM event_log("<pipeline-id>")
+ORDER BY timestamp DESC
+LIMIT 50;
+
+-- 2. Show only errors and warnings
+SELECT timestamp, level, message
+FROM event_log("<pipeline-id>")
+WHERE level IN ('ERROR', 'WARN')
+ORDER BY timestamp DESC;
+
+-- 3. Expectation pass/fail counts per run
+SELECT
+  timestamp,
+  details:flow_progress.metrics.num_output_rows                      AS output_rows,
+  details:flow_progress.data_quality.expectations[0].name           AS expectation_name,
+  details:flow_progress.data_quality.expectations[0].passed_records AS passed,
+  details:flow_progress.data_quality.expectations[0].failed_records AS failed
+FROM event_log("<pipeline-id>")
+WHERE event_type = 'flow_progress'
+  AND details:flow_progress.data_quality IS NOT NULL
+ORDER BY timestamp DESC;
+```
+
+### Step 3: Set up a DBSQL Alert
+
+1. Save the error query above as a named query in Databricks SQL: `dlt_errors_last_24h`
+2. Navigate to **SQL → Alerts → New Alert**
+3. Attach query: `dlt_errors_last_24h`
+4. Condition: `Value > 0`
+5. Set a notification destination (email or Slack)
+6. Schedule: every 1 hour
+
+**✅ Check:** What SQL function do you use to query a DLT pipeline's event log, and what information can you extract from it?
+
+---
+
+## Task 6 — Photon & Serverless Compute (15 min — Hands-On Verification)
+
+**Goal:** Verify Photon is active on your cluster and observe the Spark UI difference.
+
+### Step 1: Check if Photon is enabled
+
+```python
+# In a notebook on a Photon-enabled cluster (DBR with Photon runtime)
+print(spark.conf.get("spark.databricks.photon.enabled"))
+# Expected: true
+
+# Run a SQL aggregation and check SparkUI for Photon nodes
+df = spark.range(10_000_000).toDF("id")
+result = df.groupBy((df.id % 100).alias("bucket")).count()
+result.show(5)
+
+# In Spark UI → SQL/DataFrame tab → click the query plan
+# Look for 'WholeStageCodegenTransformer' nodes — these are Photon-executed
+```
+
+### Step 2: Test Python UDF limitation
+
+```python
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+
+# Python UDF — bypasses Photon entirely
+@udf(returnType=StringType())
+def classify_amount(amount):
+    if amount > 300: return "high"
+    elif amount > 100: return "medium"
+    else: return "low"
+
+df_orders = spark.table("lab_catalog.day5_dlt.clean_orders")
+
+# With Python UDF (no Photon benefit on the UDF step)
+df_orders.withColumn("tier", classify_amount("amount")).show()
+
+# Native SQL equivalent (Photon-accelerated)
+from pyspark.sql.functions import when
+df_orders.withColumn(
+    "tier",
+    when(col("amount") > 300, "high")
+    .when(col("amount") > 100, "medium")
+    .otherwise("low")
+).show()
+
+# Open Spark UI and compare the two query plans
+# The native version will show Photon nodes; the UDF version will not
+```
+
+**✅ Check:** How do you identify in the Spark UI whether a query was executed by Photon?
+
+---
+
+## Task 7 — Unity Catalog Governance (20 min)
+
+**Goal:** Practice GRANT/REVOKE, column masking, and verify lineage tracking.
+
+```sql
+-- Step 1: Grant access to a group
+GRANT USE CATALOG ON CATALOG lab_catalog     TO `analysts`;
+GRANT USE SCHEMA  ON SCHEMA  lab_catalog.day5_dlt TO `analysts`;
+GRANT SELECT      ON TABLE   lab_catalog.day5_dlt.customer_order_summary TO `analysts`;
+
+-- Step 2: Check what permissions exist on a table
+SHOW GRANTS ON TABLE lab_catalog.day5_dlt.customer_order_summary;
+
+-- Step 3: Create a column mask for sensitive data (email in customers CDC)
+CREATE OR REPLACE FUNCTION lab_catalog.day5_dlt.mask_email(email STRING)
+RETURNS STRING
+RETURN CASE
+  WHEN is_account_group_member('pii-access') THEN email
+  ELSE regexp_replace(email, '(^[^@]+)', '***')
+END;
+
+-- Apply the mask to silver_customers_scd1
+ALTER TABLE lab_catalog.day5_dlt.silver_customers_scd1
+  ALTER COLUMN email SET MASK lab_catalog.day5_dlt.mask_email;
+
+-- Verify: users not in 'pii-access' group will see ***@a.com
+SELECT id, name, email FROM lab_catalog.day5_dlt.silver_customers_scd1;
+
+-- Step 4: Check lineage in the Unity Catalog UI
+-- Navigate to: Catalog Explorer → lab_catalog → day5_dlt → clean_orders → Lineage tab
+-- You should see: raw_orders (source) → clean_orders → customer_order_summary (downstream)
+
+-- Step 5: Revoke access
+REVOKE SELECT ON TABLE lab_catalog.day5_dlt.customer_order_summary FROM `analysts`;
+```
+
+**✅ Check:** What is the difference between a Unity Catalog **column mask** and a **row filter**? Give a use case for each.
+
+---
+
+## Task 8 — Exam-Style Quiz (15 min)
 
 **Q1.** In a DLT pipeline, you define:
 ```sql
@@ -334,194 +705,63 @@ AS SELECT * FROM LIVE.orders_raw
 What happens when a row with `amount = -5` arrives?
 - A) The pipeline fails
 - B) The row is logged as a warning and kept
-- C) The row is removed from the output
+- **C) The row is silently removed from the output** ✅
 - D) The pipeline pauses
 
-**Q2.** You have a 6-task Workflows job. Tasks 1-3 succeeded, task 4 failed, tasks 5-6 were skipped. You click "Repair Run". Which statement is correct?
+**Q2.** A 6-task Workflows job: tasks 1–3 succeeded, task 4 failed, tasks 5–6 were skipped. You click **Repair Run**. Which is correct?
 - A) All 6 tasks run from the beginning
-- B) Only task 4 re-runs; tasks 5-6 remain skipped
-- C) Tasks 4, 5, and 6 re-run; tasks 1-3 are not re-run
+- B) Only task 4 re-runs; tasks 5–6 remain skipped
+- **C) Tasks 4, 5, and 6 re-run; tasks 1–3 are not re-run** ✅
 - D) Only failed tasks re-run; skipped tasks require a full new run
 
-**Q3.** In a DLT notebook, you want to read from a streaming source within a pipeline. Which function do you use?
+**Q3.** In a DLT notebook, you want to read from another streaming table within the same pipeline. Which function do you use?
 - A) `spark.readStream("table_name")`
 - B) `dlt.read("table_name")`
-- C) `dlt.read_stream("table_name")`
+- **C) `dlt.read_stream("table_name")` ✅**
 - D) `spark.table("LIVE.table_name")`
 
-**Q4.** Which DLT table type is NOT physically stored as a Delta table?
+**Q4.** Which DLT table type is **not** physically stored as a Delta table?
 - A) Streaming Table
 - B) Materialized View
-- C) Live View
+- **C) Live View** ✅
 - D) Both A and B
 
-**Q5.** In Databricks Asset Bundles, what does `mode: production` affect?
-- A) Uses a new isolated cluster per run and enables auto-retry on failure
+**Q5.** In Databricks Asset Bundles, what does `mode: production` do?
+- **A) Provisions a new isolated cluster per run and enables auto-retry on failure** ✅
 - B) Deploys to the production workspace URL automatically
 - C) Enables row-level security on all tables
 - D) Activates Unity Catalog governance
 
-```python
-# ─── Answers ───
-print("Q1: C — ON VIOLATION DROP ROW removes the bad row")
-print("Q2: C — Repair Run re-runs failed + downstream skipped tasks")
-print("Q3: C — dlt.read_stream() for streaming sources within DLT")
-print("Q4: C — Live Views are computed on-the-fly, not stored")
-print("Q5: A — production mode creates new clusters and enables retry")
-```
+**Q6.** `APPLY CHANGES INTO` requires which DLT edition minimum?
+- A) Core
+- **B) Pro** ✅
+- C) Advanced
+- D) Standard
+
+**Q7.** Which statement about Photon is correct?
+- A) Photon accelerates Python UDFs by compiling them to C++
+- B) Photon requires code changes to activate
+- **C) Photon is enabled per cluster and accelerates SQL/DataFrame workloads without code changes** ✅
+- D) Photon is available in open-source Apache Spark
 
 ---
 
 ## ✅ Day 5 Completion Checklist
 
-- [ ] Can explain difference between DLT Streaming Table, Materialized View, and Live View
-- [ ] Know all 3 DLT expectation modes (WARN / DROP / FAIL)
-- [ ] Understand `APPLY CHANGES INTO` for CDC
-- [ ] Know all Workflows task types
-- [ ] Understand `dbutils.jobs.taskValues` for passing data between tasks
-- [ ] Know what Repair Run does
-- [ ] Can read and interpret a DABs YAML file
-- [ ] Know `mode: development` vs `mode: production` differences
-- [ ] Completed all 5 tasks above
+- [ ] Successfully ran a 3-layer DLT pipeline (Bronze/Silver/Gold) in your production workspace
+- [ ] Observed expectation violations in the DLT Data Quality tab
+- [ ] Ran a CDC pipeline with `APPLY CHANGES INTO` and verified SCD1 vs SCD2 output
+- [ ] Built a multi-task Workflow with task values and practiced Repair Run
+- [ ] Deployed a DABs bundle with the new CLI (`databricks bundle deploy`)
+- [ ] Queried the DLT event log for expectation metrics
+- [ ] Verified Photon is enabled and compared Python UDF vs native SQL in Spark UI
+- [ ] Practiced GRANT/REVOKE and column masking in Unity Catalog
+- [ ] Scored 7/7 on the exam-style quiz
 
-## 🔗 Additional Practice
+## 🔗 Additional Resources
+
 - [DLT Quickstart (Official)](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-quickstart.html)
-- [CertSafari — DLT Questions](https://www.certsafari.com/databricks/data-engineer-associate) (filter by topic)
-- [ExamTopics DLT Thread](https://www.examtopics.com/discussions/databricks/)
-
-
----
-
-## Task 6 — Photon Engine & Serverless Compute (20 min — Conceptual)
-
-### Photon Engine
-
-Photon is a Databricks-native vectorized query engine written in C++ that accelerates SQL and DataFrame workloads.
-
-**Key facts for the exam:**
-- Photon is automatically enabled on clusters with Photon-capable runtimes (DBR with Photon suffix)
-- It accelerates SQL queries, aggregations, joins, and scans
-- No code changes needed — it transparently replaces Spark's execution engine
-- Most beneficial for: large-scale aggregations, joins, and scans on columnar data
-- NOT available in Community Edition — requires paid workspace
-
-```python
-# Cell: Check if Photon is enabled (in a paid workspace)
-# In Community Edition, this will show photon = false
-spark.conf.get("spark.databricks.photon.enabled")
-```
-
-**When to use Photon:**
-- BI/SQL workloads with large scans
-- ETL jobs with heavy aggregations
-- NOT needed for streaming-only or ML training workloads
-
----
-
-### Serverless Compute
-
-Serverless Compute removes the need to manage cluster infrastructure. Databricks automatically provisions and scales compute.
-
-**Key facts for the exam:**
-- Serverless SQL Warehouses: for SQL analytics / BI dashboards (auto-scaling, instant start)
-- Serverless Jobs: for running notebooks and workflows without cluster management
-- Billing: per-second billing based on DBUs consumed (no idle cost)
-- Cold start: nearly instant (< 5 seconds vs 5+ minutes for classic clusters)
-
-**Classic Cluster vs Serverless:**
-
-| Feature | Classic Cluster | Serverless |
-|---|---|---|
-| Startup time | 5-10 minutes | < 5 seconds |
-| Management | Manual config | Fully managed |
-| Scaling | Manual/auto-scale | Automatic |
-| Idle cost | Billed when idle | No idle cost |
-| Availability | Community Edition | Paid workspaces |
-
-```python
-# Conceptual Exercise: Answer these questions
-
-questions = [
-    "Q1: Which compute type has nearly instant startup?",
-    "Q2: Which runtime accelerates SQL without code changes?",
-    "Q3: Is Photon available in Community Edition?",
-    "Q4: What is the billing model for Serverless?",
-    "Q5: When is Photon NOT beneficial?"
-]
-
-answers = [
-    "A1: Serverless Compute (< 5 second cold start)",
-    "A2: Photon Engine (transparent acceleration)",
-    "A3: No — Photon requires a paid Databricks workspace",
-    "A4: Per-second billing on DBUs consumed, no idle cost",
-    "A5: Streaming-only workloads and ML training (less columnar scan benefit)"
-]
-
-for q, a in zip(questions, answers):
-    print(q)
-    print(a)
-    print()
-```
-
----
-
-## Task 7 — Unity Catalog Basics (20 min)
-
-Unity Catalog is Databricks' unified governance solution for data and AI.
-
-**Three-level namespace:** `catalog.schema.table`
-
-```sql
--- The three-level namespace
--- catalog = top level (e.g., "main", "dev", "prod")
--- schema  = database (e.g., "sales", "marketing")
--- table   = the actual table
-
--- Example:
-SELECT * FROM main.sales.transactions;
-
--- In Community Edition, use hive_metastore as catalog:
-SELECT * FROM hive_metastore.default.my_table;
-```
-
-```sql
--- Create a catalog (requires Unity Catalog enabled workspace)
--- CREATE CATALOG IF NOT EXISTS my_catalog;
-
--- Create a schema within a catalog
--- CREATE SCHEMA IF NOT EXISTS my_catalog.my_schema;
-
--- Grant permissions (Unity Catalog)
--- GRANT SELECT ON TABLE my_catalog.my_schema.my_table TO `user@company.com`;
--- GRANT USAGE ON SCHEMA my_catalog.my_schema TO `analyst_group`;
-```
-
-**Key Unity Catalog concepts for the exam:**
-- `GRANT` / `REVOKE` for access control
-- Row-level and column-level security via dynamic views
-- Data lineage: automatically tracked across notebooks, jobs, and SQL queries
-- Metastore: one per region, shared across workspaces
-
-```python
-# Conceptual Quiz
-uc_facts = {
-    "Namespace levels": "catalog.schema.table (3 levels)",
-    "Default catalog in CE": "hive_metastore",
-    "Grant syntax": "GRANT privilege ON object TO principal",
-    "Lineage tracking": "Automatic — no extra config needed",
-    "Metastore scope": "Per region, shared across workspaces"
-}
-
-for concept, fact in uc_facts.items():
-    print(f"{concept}: {fact}")
-```
-
----
-
-## ✅ Day 5 Extended Checklist
-
-- [ ] Understand what Photon Engine does and when to use it
-- [ ] Know the difference between Classic Cluster and Serverless
-- [ ] Can explain the Unity Catalog three-level namespace
-- [ ] Know how to GRANT permissions in Unity Catalog
-- [ ] Understand that Photon is NOT available in Community Edition
+- [APPLY CHANGES INTO (CDC)](https://docs.databricks.com/workflows/delta-live-tables/cdc.html)
+- [DABs Documentation](https://docs.databricks.com/dev-tools/bundles/index.html)
+- [Databricks CLI v2 Reference](https://docs.databricks.com/dev-tools/cli/index.html)
+- [Unity Catalog Privileges Reference](https://docs.databricks.com/data-governance/unity-catalog/manage-privileges/privileges.html)
