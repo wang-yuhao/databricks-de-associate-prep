@@ -658,27 +658,26 @@ databricks bundle deploy --target prod
 Delta Sharing is an open protocol to share Delta Lake data securely with external recipients — including non-Databricks systems.
 
 ```sql
+%sql
 -- Step 1: Create a Share object in Unity Catalog
+DROP SHARE IF EXISTS orders_share;
+
 CREATE SHARE orders_share
   COMMENT 'Share completed orders with partner analytics teams';
 
 -- Step 2: Add a table to the share (you can add partitions or specific columns)
 ALTER SHARE orders_share
-  ADD TABLE lab_catalog.day5_ldp.customer_order_summary;
+  ADD MATERIALIZED VIEW lab.day5_dlt.customer_order_summary;
 
--- Step 3: Create a Recipient (Databricks-to-Databricks sharing)
-CREATE RECIPIENT partner_team
-  USING ID 'databricks_account_id_of_recipient_workspace';
-  -- For external (non-Databricks) recipients, omit USING ID — a token-based URL is generated
+-- Step 3 (corrected): Create an external recipient (no USING ID needed)
+CREATE RECIPIENT IF NOT EXISTS partner_team
+  COMMENT 'External partner team for order data access';
 
 -- Step 4: Grant access
 GRANT SELECT ON SHARE orders_share TO RECIPIENT partner_team;
 
--- Step 5: View what is shared
-SHOW ALL IN SHARE orders_share;
-
--- Step 6: Revoke access
-REVOKE SELECT ON SHARE orders_share FROM RECIPIENT partner_team;
+-- Step 5: Get the activation link (download the credential here)
+DESCRIBE RECIPIENT partner_team;
 ```
 
 **Key Delta Sharing concepts for the exam:**
