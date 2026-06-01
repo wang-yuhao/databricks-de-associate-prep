@@ -1,0 +1,69 @@
+bundle:
+  name: day5_orders_lab
+
+variables:
+  # Overridden per target to avoid hardcoding environment-specific values
+  num_workers:
+    default: 2
+  schedule_pause_status:
+    default: PAUSED   # safe default — always paused until explicitly enabled
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-7405612014206150.10.azuredatabricks.net
+    variables:
+      num_workers: 1               # smaller cluster for dev cost savings
+      schedule_pause_status: PAUSED
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-7405612014206150.10.azuredatabricks.net
+    variables:
+      num_workers: 4
+      schedule_pause_status: UNPAUSED   # enable in prod
+    run_as:
+      service_principal_name: sp-day5-prod@company.com
+
+resources:
+  jobs:
+    day5_orders_job:
+      name: day5_orders_lab_${bundle.target}
+      schedule:
+        quartz_cron_expression: "0 0 6 ? * MON-FRI *"
+        timezone_id: "Europe/Berlin"
+        pause_status: ${var.schedule_pause_status}
+      tasks:
+        - task_key: task_ingest
+          notebook_task:
+            notebook_path: ./src/notebooks/task_ingest.py
+          job_cluster_key: main_cluster
+        - task_key: task_validate
+          depends_on:
+            - task_key: task_ingest
+          notebook_task:
+            notebook_path: ./src/notebooks/task_validate.py
+          job_cluster_key: main_cluster
+        - task_key: run_ldp_pipeline
+          depends_on:
+            - task_key: task_validate
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.orders_pipeline.id}
+          # No cluster needed — LDP manages its own compute
+      job_clusters:
+        - job_cluster_key: main_cluster
+          new_cluster:
+            spark_version: "17.3.x-scala2.13"
+            node_type_id:  "Standard_D4ds_v4"   # Azure; change for AWS/GCP
+            num_workers:   ${var.num_workers}
+
+  pipelines:
+    orders_pipeline:
+      name: orders_pipeline_lab_${bundle.target}
+      target: lab_catalog.day5_ldp
+      libraries:
+        - notebook:
+            path: ./src/notebooks/ldp_orders_pipeline.py

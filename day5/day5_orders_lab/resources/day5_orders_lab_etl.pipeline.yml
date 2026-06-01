@@ -1,0 +1,20 @@
+# The main pipeline for day5_orders_lab
+
+resources:
+  pipelines:
+    day5_orders_lab_etl:
+      name: day5_orders_lab_etl
+      catalog: ${var.catalog}
+      schema: ${var.schema}
+      serverless: true
+      root_path: "../src/day5_orders_lab_etl"
+
+      libraries:
+        - glob:
+            include: ../src/day5_orders_lab_etl/transformations/**
+
+      environment:
+        dependencies:
+          # We include every dependency defined by pyproject.toml by defining an editable environment
+          # that points to the folder where pyproject.toml is deployed.
+          - --editable ${workspace.file_path}
