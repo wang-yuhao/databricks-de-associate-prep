@@ -442,6 +442,36 @@ For each task:
 
 ### Step 4: Test Repair Run
 
+1. Click **Run now** (blue button, top right of the job page) to trigger an immediate run.
+2. Switch to the **Runs** tab to see the live task graph with status badges.
+3. Click any task node in the run graph to open its **logs** and **output**.
+
+**Repair Run test:**
+
+1. In `task_validate`, temporarily add `raise ValueError("forced fail")` and run the job.
+2. Confirm: `task_validate` → ❌ Failed, `task_report` → ⏭ Skipped, `task_alert` → ✅ Ran.
+3. Fix the notebook, then go to **Runs** tab → open the failed run → click **Repair Run**.
+4. Observe: only `task_validate` and `task_report` re-run; `task_ingest` (already succeeded) is skipped.
+
+> **✅ Exam check:** What is the difference between `AT_LEAST_ONE_FAILED` and `ALL_DONE` run conditions? When would you use a file-arrival trigger instead of a scheduled trigger?
+### Step 3: Understand trigger types (exam topic)
+
+| Trigger type | When to use |
+|---|---|
+| **Scheduled (time-based)** | Predictable batch cadence; data arrives reliably by a certain time |
+| **File arrival** | React immediately when files land in cloud storage; removes polling |
+| **Table update** | Chain jobs so a downstream job fires when an upstream Delta table changes |
+
+### Step 4: Test Repair Run
+
+1. Temporarily introduce a failure in `task_validate` (e.g., `raise ValueError("forced fail")`)
+2. Run the job manually — `task_validate` fails, `task_report` is skipped, `task_alert` runs
+3. Fix the notebook
+4. In the job run history, click **Repair Run**
+5. Observe that only `task_validate` and `task_report` re-run — `task_ingest` is skipped
+
+**✅ Check:** What is the difference between `AT_LEAST_ONE_FAILED` and `ALL_DONE` task run conditions? When would you use a file-arrival trigger instead of a scheduled trigger?
+
 1. Temporarily introduce a failure in `task_validate` (e.g., `raise ValueError("forced fail")`)
 2. Run the job manually — `task_validate` fails, `task_report` is skipped, `task_alert` runs
 3. Fix the notebook
