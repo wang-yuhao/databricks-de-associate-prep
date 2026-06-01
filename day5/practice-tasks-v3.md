@@ -1,19 +1,21 @@
 # Day 5 — Practice Tasks: Lakeflow Spark Declarative Pipelines, Lakeflow Jobs & CI/CD
 
-> **Exam version:** Aligned with the **Databricks Certified Data Engineer Associate** exam guide effective **May 4, 2026**.
+> **Exam version:** Aligned with the **Databricks Certified Data Engineer Associate** exam guide effective **May 4, 2026** and refreshed against Databricks documentation current through May 2026.[1][2][3][4][5]
 >
 > Key terminology changes in this version:
-> - **Delta Live Tables (DLT)** → **Lakeflow Spark Declarative Pipelines (LDP)**
-> - **Workflows / Jobs** → **Lakeflow Jobs**
-> - **Databricks Asset Bundles (DABs)** → **Declarative Automation Bundles (DABs)** (same acronym, new official name)
-> - **DLT pipeline task in Workflows** is **no longer on the exam** — pipelines are orchestrated via Lakeflow Jobs using a dedicated **pipeline task** type
+> - **Delta Live Tables (DLT)** → **Lakeflow Spark Declarative Pipelines (LDP / SDP)**.[1][2]
+> - **Workflows / Jobs** → **Lakeflow Jobs**.[6][7]
+> - **Databricks Asset Bundles (DABs)** → **Declarative Automation Bundles (DABs)**.[5]
+> - **AUTO CDC / AUTO CDC INTO** is the current Lakeflow wording for CDC flows; older `APPLY CHANGES INTO` phrasing may still appear in notebooks and community content.[8][9]
 >
-> **Environment:** Full production Databricks workspace (Azure / AWS / GCP)  
-> **Requirements:** Unity Catalog enabled workspace, ADLS Gen2 or S3 storage, Premium or above tier for LDP CDC tasks
+> **Environment:** Full production Databricks workspace (Azure / AWS / GCP).  
+> **Requirements:** Unity Catalog enabled workspace, external cloud storage, and a workspace tier that supports the required Lakeflow features.[10][11][2]
+>
+> **Important compatibility note:** You may still see `import dlt` in Python examples and `APPLY CHANGES INTO` in older study material. For exam and interview prep, map these to the current Lakeflow product names rather than assuming the concepts changed.[1][12][9]
 
 All tasks below run directly in your production workspace. There are no simulations.
 
----
+***
 
 ## 🛠️ Setup (10 minutes)
 
@@ -81,7 +83,7 @@ df.write.mode("overwrite").json(LANDING_PATH)
 print(f"Wrote {df.count()} rows to {LANDING_PATH}")
 ```
 
----
+***
 
 ## Task 1 — Build a Lakeflow Spark Declarative Pipeline: Bronze → Silver → Gold (45 min)
 
@@ -171,16 +173,21 @@ def customer_order_summary():
 
 ### Step 2: Create and configure the LDP pipeline
 
-1. Navigate to **Lakeflow → Declarative Pipelines → Create Pipeline** (or **Delta Live Tables → Create Pipeline** in older workspace UIs — both lead to the same LDP product)
-2. Fill in:
+> **UI note (2026):** In current workspaces, the entry point is typically **Jobs & Pipelines** in the left sidebar, then **Create** → **Pipeline**. Older screenshots may say “Delta Live Tables” or “Declarative Pipelines,” but the current product name is Lakeflow Spark Declarative Pipelines.[1][2][3]
+
+1. In the left sidebar, open **Jobs & Pipelines**.[3][7]
+2. Click **Create** → **Pipeline**.[3]
+3. In the pipeline editor or create form, fill in:
    - **Pipeline name:** `orders_pipeline_lab`
-   - **Pipeline mode:** Triggered
-   - **Source code:** path to your LDP notebook above
+   - **Pipeline mode:** **Triggered** for this lab
+   - **Source code / Notebook:** your `ldp_orders_pipeline` notebook
    - **Target schema:** `lab_catalog.day5_ldp`
-   - **Storage location:** `abfss://ldp-lab@<your-storage-account>.dfs.core.windows.net/ldp_storage/`
-   - **Cluster:** Serverless (recommended) or 1 driver + 1 worker for cost control
-   - **Channel:** Current
-3. Click **Start** to run the pipeline
+   - **Storage location:** a managed or external path dedicated to the pipeline, for example `abfss://ldp-lab@<your-storage-account>.dfs.core.windows.net/ldp_storage/`
+   - **Compute:** **Serverless** if available; otherwise use an appropriate classic configuration
+   - **Channel:** **Current** unless you are explicitly testing preview functionality[2][13]
+4. Save the pipeline, then click **Start** or **Run pipeline** to execute it.[2]
+
+> **Current best practice:** Use a dedicated storage location for pipeline state and avoid reusing landing paths for checkpoints or pipeline metadata.[14][15]
 
 ### Step 3: Verify results
 
@@ -212,7 +219,7 @@ In the LDP pipeline UI → **Data Quality** tab:
 
 **✅ Check:** Explain the three LDP expectation modes (`expect`, `expect_or_drop`, `expect_or_fail`) and which Gold layer object type (Materialized View vs. Streaming Table vs. View) is most appropriate for the aggregation above.
 
----
+***
 
 ## Task 2 — CDC with APPLY CHANGES INTO (30 min)
 
@@ -311,30 +318,34 @@ dlt.apply_changes(
 
 ### Step 3: Create a new LDP pipeline for CDC
 
-Repeat the pipeline creation from Task 1, but point to the `ldp_customers_cdc` notebook.
+Repeat the pipeline creation from Task 1, but point to the `ldp_customers_cdc` notebook.[2]
 After it runs, verify:
 
 ```sql
--- SCD1: Alice should have updated email; Bob should be gone
+-- SCD1: Alice should have updated email; Bob should be removed from the current-state table
 SELECT * FROM lab_catalog.day5_ldp.silver_customers_scd1 ORDER BY id;
 
--- SCD2: Alice should have TWO rows (original + updated), Bob should be gone
+-- SCD2: Alice should have TWO rows (original + updated).
+-- Bob should remain in history, but his record should be closed with a non-null __END_AT.
 SELECT id, name, email, __START_AT, __END_AT
 FROM lab_catalog.day5_ldp.silver_customers_scd2
 ORDER BY id, __START_AT;
 ```
 
-**Expected SCD2 output for Alice:**
+**Expected SCD2 interpretation:**
 
-```
+```text
 id | name  | email         | __START_AT          | __END_AT
  1 | Alice | alice@a.com   | 2024-01-01 10:00:00 | 2024-01-01 11:00:00
  1 | Alice | alice2@a.com  | 2024-01-01 11:00:00 | null         ← current record
+ 2 | Bob   | bob@b.com     | 2024-01-01 10:01:00 | 2024-01-01 12:00:00  ← historical, no longer current
 ```
 
-**✅ Check:** What is the minimum LDP tier required to use `APPLY CHANGES INTO`? What would you use for CDC outside of LDP (hint: Delta Lake CDF)?
+In SCD Type 2, deletes close the active version rather than physically removing the historical row from the table.[8][16][17]
 
----
+**✅ Check:** What is the current Lakeflow SQL name for this CDC feature (`AUTO CDC INTO`), and what would you use for CDC outside of LDP (hint: Delta Lake CDF)?[9][18]
+
+***
 
 ## Task 3 — Build a Multi-Task Lakeflow Job (30 min)
 
@@ -393,140 +404,34 @@ print("[alert] A pipeline task failed. Sending notification...")
 
 ### Step 2: Create the Lakeflow Job
 
-> **UI Note (June 2026):** The entry point is now **Jobs & Pipelines** in the left sidebar — not "Lakeflow → Jobs → Create Job". The task graph, run conditions, pipeline task type, and schedule are all configured from the same job page.
+1. Navigate to **Lakeflow → Jobs → Create Job**
+2. Set the job name: `day5_lab_pipeline`
+3. Add tasks in this order with these dependencies:
 
-#### 2.1 Open the Jobs UI and create the job
+```
+task_ingest → task_validate → task_report
+                   ↓
+             task_alert  (run condition: AT_LEAST_ONE_FAILED)
+```
 
-1. In the **left sidebar**, click the workflow icon → **Jobs & Pipelines**.
-2. Click **Create** → **Job** (top right).
-3. The task graph area opens immediately, prompting you to configure the first task.
-4. **Rename the job:** click the default name `New Job <timestamp>` shown at the top center of the page and type `day5_lab_pipeline`. Press Enter or click outside to confirm.
+For each task:
 
-> **Job details panel:** A collapsible right-hand panel (labelled **Job details**) contains the job name, schedule/trigger, parameters, compute, tags, notifications, and advanced settings. You will use this panel in step 2.5.
+- **Type:** Notebook
+- **Cluster:** Job cluster (new cluster per run) with DBR 15.4 LTS or Serverless
+- **Parameters:** none needed (task values are used instead)
 
----
+4. Add a **pipeline task** (optional — for exam awareness):
+   - Add a fifth task `task_run_ldp` of type **Pipeline**
+   - Point it to your `orders_pipeline_lab` LDP pipeline
+   - This is how Lakeflow Jobs orchestrates LDP pipelines — there is no separate "DLT on Workflows" concept
 
-#### 2.2 Add `task_ingest` (first notebook task)
+5. Add a **schedule and trigger**:
+   - **Time-based trigger:** every weekday at 06:00 Europe/Berlin
+     - Quartz cron: `0 0 6 ? * MON-FRI *`
+     - Timezone: `Europe/Berlin`
+   - **File-arrival trigger (exam topic):** alternatively, configure a file-arrival trigger pointing to your landing zone — the job fires when new files appear
+   - **Table-update trigger (exam topic):** trigger downstream jobs when an upstream table is updated
 
-When the job has no tasks yet, Databricks shows the **task type chooser** inline in the graph area.
-
-1. Click the **Notebook** tile.  
-   - If it is not visible, click **Add another task type** and search for `Notebook`.
-2. A configuration panel appears **below the task graph**. Fill in:
-   - **Task name:** `task_ingest`
-   - **Type:** Notebook *(already selected)*
-   - **Source:** Workspace
-   - **Path:** click the folder icon → browse to your `task_ingest` notebook → click **Confirm**
-   - **Compute:** choose **Serverless** (recommended) or click **+ Add new job cluster** and select DBR 15.4 LTS
-   - **Depends on:** *(leave empty — this is the first task)*
-3. Click **Create task**.
-
-> `task_ingest` now appears as the first box in the task graph.
-
----
-
-#### 2.3 Add `task_validate` (depends on ingest)
-
-1. Click the **⊕ Add task** button (a `+` circle icon that appears below or beside the existing task node, or at the top of the graph toolbar).
-2. In the **task type chooser**, click **Notebook**.
-3. Configure:
-   - **Task name:** `task_validate`
-   - **Source:** Workspace
-   - **Path:** your `task_validate` notebook
-   - **Compute:** same as above (reuse or serverless)
-   - **Depends on:** click the dropdown → select **`task_ingest`**
-4. Click **Create task**.
-
-> The graph now shows: `task_ingest → task_validate`
-
----
-
-#### 2.4 Add `task_report` (depends on validate)
-
-1. Click **⊕ Add task** again → **Notebook**.
-2. Configure:
-   - **Task name:** `task_report`
-   - **Source:** Workspace
-   - **Path:** your `task_report` notebook
-   - **Compute:** same
-   - **Depends on:** select **`task_validate`**
-3. Click **Create task**.
-
-> The graph now shows: `task_ingest → task_validate → task_report`
-
----
-
-#### 2.5 Add `task_alert` with failure run condition
-
-1. Click **⊕ Add task** → **Notebook**.
-2. Configure:
-   - **Task name:** `task_alert`
-   - **Source:** Workspace
-   - **Path:** your `task_alert` notebook
-   - **Compute:** same
-   - **Depends on:** select **`task_ingest`**, **`task_validate`**, and **`task_report`** (so it is aware of any of them failing)
-3. Find the **Run if** field (labelled **Run condition** or **Run if** just below the **Depends on** dropdown). Change it from the default **All succeeded** to **At least one failed**.
-4. Click **Create task**.
-
-> `task_alert` now appears in the graph with a failure-path arrow. The full DAG:
-> ```
-> task_ingest → task_validate → task_report
->      ↓               ↓             ↓
->             task_alert (AT_LEAST_ONE_FAILED)
-> ```
-
----
-
-#### 2.6 Add `task_run_ldp` — Pipeline task (exam awareness)
-
-1. Click **⊕ Add task** → look for the **Pipeline** tile.  
-   - If not visible, click **Add another task type** → search for `Pipeline`.
-2. Configure:
-   - **Task name:** `task_run_ldp`
-   - **Type:** Pipeline *(already selected)*
-   - **Pipeline:** click the dropdown/search and select your **`orders_pipeline_lab`** Lakeflow Spark Declarative Pipeline
-   - **Compute:** no cluster needed — Lakeflow Spark Declarative Pipelines manage their own compute
-   - **Depends on:** select **`task_validate`** (so it runs after validation succeeds)
-3. Click **Create task**.
-
-> This is how Lakeflow Jobs orchestrates an LDP pipeline — there is no separate "DLT on Workflows" concept on the exam.
-
----
-
-#### 2.7 Configure the schedule
-
-1. In the **Job details** side panel (right side of the job page), find **Trigger** or **Schedule**.
-2. Click **Add trigger** (or **Add schedule**).
-3. Choose **Scheduled** as the trigger type.
-4. Select **Advanced (Cron syntax)** to enter a custom expression.
-5. Enter the Quartz cron: `0 0 6 ? * MON-FRI *`
-6. Set **Timezone** to `Europe/Berlin`.
-7. Click **Save** (or **Create schedule**).
-
-**Other trigger types (exam topics):**
-
-| Trigger type | Where to configure | When to use |
-|---|---|---|
-| **Scheduled (time-based)** | Job details panel → Add trigger → Scheduled | Predictable batch cadence |
-| **File arrival** | Job details panel → Add trigger → File arrival | React when new files land in cloud storage; no polling needed |
-| **Table update** | Job details panel → Add trigger → Table update | Chain jobs; fire downstream job when an upstream Delta table changes |
-
----
-
-#### 2.8 Run and test the job
-
-1. Click **Run now** (blue button, top right of the job page) to trigger an immediate run.
-2. Switch to the **Runs** tab to see the live task graph with status badges.
-3. Click any task node in the run graph to open its **logs** and **output**.
-
-**Repair Run test:**
-
-1. In `task_validate`, temporarily add `raise ValueError("forced fail")` and run the job.
-2. Confirm: `task_validate` → ❌ Failed, `task_report` → ⏭ Skipped, `task_alert` → ✅ Ran.
-3. Fix the notebook, then go to **Runs** tab → open the failed run → click **Repair Run**.
-4. Observe: only `task_validate` and `task_report` re-run; `task_ingest` (already succeeded) is skipped.
-
-> **✅ Exam check:** What is the difference between `AT_LEAST_ONE_FAILED` and `ALL_DONE` run conditions? When would you use a file-arrival trigger instead of a scheduled trigger?
 ### Step 3: Understand trigger types (exam topic)
 
 | Trigger type | When to use |
@@ -545,13 +450,13 @@ When the job has no tasks yet, Databricks shows the **task type chooser** inline
 
 **✅ Check:** What is the difference between `AT_LEAST_ONE_FAILED` and `ALL_DONE` task run conditions? When would you use a file-arrival trigger instead of a scheduled trigger?
 
----
+***
 
 ## Task 4 — Declarative Automation Bundles (DABs) Hands-On (30 min)
 
 **Goal:** Create, deploy, and run a DABs bundle using the Databricks CLI. Understand environment-specific configuration via variables and overrides.
 
-> **Exam note:** The official name is now **Declarative Automation Bundles (DABs)** (formerly Databricks Asset Bundles). The `databricks.yml` syntax and CLI commands remain the same.
+> **Exam note:** The official name is now **Declarative Automation Bundles (DABs)** (formerly Databricks Asset Bundles). The `databricks.yml` syntax and core CLI workflow remain the same: validate, deploy, and run.[5]
 
 ### Step 1: Install the Databricks CLI
 
@@ -565,7 +470,7 @@ curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.s
 
 # Verify
 databricks --version
-# Expected: Databricks CLI v0.200+
+# Expected: modern Databricks CLI with bundle support
 ```
 
 ### Step 2: Authenticate
@@ -584,8 +489,9 @@ export DATABRICKS_TOKEN=<your-pat>
 ```bash
 mkdir day5-bundle && cd day5-bundle
 databricks bundle init
-# Choose: default-python template
+# Choose a bundle template suitable for jobs/pipelines in your workspace
 # Enter project name: day5_orders_lab
+# The exact template names can evolve across CLI releases; the important exam concept is bundle-based resource definition and deployment.[web:152]
 ```
 
 ### Step 4: Edit `databricks.yml`
@@ -692,13 +598,17 @@ databricks bundle deploy --target prod
 ### Step 7: Understand Git integration and branch management
 
 ```bash
-# Databricks Repos / Git Folders — exam topic: CI/CD workflow
+# Git-backed workspace folders / Repos — exam topic: CI/CD workflow
 # In the workspace UI:
-#   1. Open your Repo → create a new branch (feature/day5-update)
-#   2. Edit the LDP notebook and commit
-#   3. Push the branch → create a pull request on GitHub/GitLab
-#   4. On merge to main → CI/CD pipeline triggers: databricks bundle deploy --target prod
+#   1. Open your Git-backed project folder and create a feature branch (feature/day5-update)
+#   2. Edit the LDP notebook or bundle files and commit
+#   3. Push the branch and open a pull request in GitHub/GitLab/Azure DevOps
+#   4. After merge to main, CI/CD runs bundle validation and deployment, e.g.:
+#      databricks bundle validate --target prod
+#      databricks bundle deploy --target prod
 ```
+
+> Databricks terminology around Git-backed folders can vary by workspace and cloud, but the exam focus is the SDLC pattern: branch, review, merge, validate, deploy.[5]
 
 **✅ Check questions:**
 
@@ -707,7 +617,7 @@ databricks bundle deploy --target prod
 3. What is the difference between `databricks bundle deploy` and `databricks bundle run`?
 4. In a CI/CD workflow, which Databricks CLI commands would you call in a GitHub Actions pipeline to promote code from dev to prod?
 
----
+***
 
 ## Task 5 — Delta Sharing & Lakehouse Federation (20 min) ⭐ New exam topic
 
@@ -801,7 +711,7 @@ LIMIT 50;
 
 **✅ Check:** When should you use Lakehouse Federation instead of ingesting data with Lakeflow Connect? What are the limitations?
 
----
+***
 
 ## Task 6 — Liquid Clustering & Predictive Optimization (20 min) ⭐ New exam topic
 
@@ -869,7 +779,7 @@ DESCRIBE CATALOG lab_catalog;
 
 **✅ Check:** When would you choose Liquid Clustering over partitioning? What does Predictive Optimization remove the need for?
 
----
+***
 
 ## Task 7 — Unity Catalog Governance (20 min)
 
@@ -922,7 +832,7 @@ REVOKE SELECT ON TABLE lab_catalog.day5_ldp.customer_order_summary FROM `analyst
 
 **✅ Check:** What is the difference between a **column mask** and a **row filter** in Unity Catalog? What does `DENY` do that `REVOKE` does not? What is ABAC in the context of Unity Catalog?
 
----
+***
 
 ## Task 8 — Spark UI Performance Analysis (15 min)
 
@@ -956,7 +866,7 @@ spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "50MB")  # auto-broadcast
 
 **✅ Check:** How do you identify data skew in the Spark UI? What is the difference between data spill and shuffle? Name two tuning parameters that affect shuffle performance.
 
----
+***
 
 ## Task 9 — Exam-Style Quiz (15 min)
 
@@ -974,7 +884,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) The row is silently removed from the output** ✅
 - D) The pipeline pauses and waits for operator input
 
----
+***
 
 **Q2.** A 6-task Lakeflow Job: tasks 1–3 succeeded, task 4 failed, tasks 5–6 were skipped. You click **Repair Run**. Which is correct?
 
@@ -983,7 +893,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) Tasks 4, 5, and 6 re-run; tasks 1–3 are not re-run** ✅
 - D) Only failed tasks re-run; skipped tasks require a full new run
 
----
+***
 
 **Q3.** In an LDP notebook, you want to read from another streaming table in the same pipeline. Which function do you use?
 
@@ -992,7 +902,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) `dlt.read_stream("table_name")` ✅**
 - D) `spark.table("LIVE.table_name")`
 
----
+***
 
 **Q4.** You need to share a Delta table with a partner company that uses Snowflake (not Databricks). Which approach is correct?
 
@@ -1001,7 +911,7 @@ A row arrives with `amount = -5`. What happens?
 - C) Use Lakehouse Federation to expose the table as a foreign catalog
 - D) Export the table to Parquet and upload to the partner's S3 bucket
 
----
+***
 
 **Q5.** In Declarative Automation Bundles, what does `mode: production` enforce?
 
@@ -1010,7 +920,7 @@ A row arrives with `amount = -5`. What happens?
 - C) Enables row-level security on all tables deployed by the bundle
 - D) Activates Predictive Optimization on all Delta tables
 
----
+***
 
 **Q6.** Which statement about Liquid Clustering is correct?
 
@@ -1019,7 +929,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) Liquid Clustering is the recommended approach for new Delta tables; it supports online, incremental rebalancing without a full table rewrite** ✅
 - D) Liquid Clustering requires the Advanced LDP edition
 
----
+***
 
 **Q7.** Which Lakeflow Jobs trigger type should you use when a downstream pipeline should run immediately after new files appear in ADLS?
 
@@ -1028,7 +938,7 @@ A row arrives with `amount = -5`. What happens?
 - C) Table-update trigger on the bronze streaming table
 - D) Continuous pipeline mode in LDP
 
----
+***
 
 **Q8.** What does Predictive Optimization in Unity Catalog do?
 
@@ -1037,7 +947,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) Automatically schedules and runs OPTIMIZE and VACUUM operations based on table access patterns, removing the need for manual maintenance jobs** ✅
 - D) Enables predicate push-down for all Unity Catalog managed tables
 
----
+***
 
 **Q9.** In the Spark UI, a stage shows that one task took 45 seconds while all other tasks completed in under 2 seconds. What does this indicate?
 
@@ -1046,7 +956,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) Data skew — one partition contains significantly more data than the others** ✅
 - D) The Photon runtime is not enabled for this cluster
 
----
+***
 
 **Q10.** Which Unity Catalog feature lets you query a PostgreSQL database through Databricks SQL without moving or replicating the data?
 
@@ -1055,7 +965,7 @@ A row arrives with `amount = -5`. What happens?
 - **C) Lakehouse Federation (Foreign Catalog)** ✅
 - D) Lakeflow Connect managed connector
 
----
+***
 
 ## ✅ Day 5 Completion Checklist
 
@@ -1073,7 +983,7 @@ A row arrives with `amount = -5`. What happens?
 - [ ] Identified data skew and shuffle bottlenecks in the Spark UI
 - [ ] Scored 9/10 or better on the exam-style quiz
 
----
+***
 
 ## 🔗 Official Resources
 
