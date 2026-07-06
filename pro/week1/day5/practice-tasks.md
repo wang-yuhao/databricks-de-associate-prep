@@ -1,108 +1,51 @@
-# Day 5 — Practice Tasks: Advanced Structured Streaming
+# Day 5 Practice Tasks — Workflows & Job Orchestration
+
+## Task 1 — Multi-Task Job Design
+Design a Databricks Job with the following task DAG:
+```
+ingest_orders → validate_orders → transform_orders
+                                        ↓
+                              load_gold_table → notify_success
+```
+For each task, specify:
+- Task type (notebook / DLT pipeline / SQL / Python script)
+- Cluster type (job cluster vs existing cluster)
+- Any `depends_on` relationships
+
+> Write this as a JSON job definition or describe in detail.
 
 ---
 
-## Task 1 — Window Type Matching
+## Task 2 — Repair Run
+1. Simulate a job failure by intentionally raising an error in the `validate_orders` notebook.
+2. Fix the error.
+3. Use **Repair Run** to re-run only the failed task without re-running `ingest_orders`.
 
-Match each window type to its description:
-
-| Window Type | Description |
-|-------------|-------------|
-| Tumbling    | ? |
-| Sliding     | ? |
-| Session     | ? |
-
-Choices:
-- A) Fixed-size, non-overlapping intervals
-- B) Overlapping windows of fixed size, advancing at a smaller interval
-- C) Variable size; closes after a period of inactivity
+> Describe what happened and what Repair Run saved you.
 
 ---
 
-## Task 2 — Watermark Calculation
+## Task 3 — Schedule & Alerts
+1. Schedule the job to run every day at 06:00 UTC using a CRON expression.
+2. Add email notification on failure to `yuhao2804@gmail.com`.
+3. What is the CRON expression for: _every Monday at 09:00 UTC_?
 
-Your stream has `withWatermark("event_timestamp", "15 minutes")`. The latest event seen so far has timestamp `10:50`. What is the current watermark threshold?
+```
+# CRON for daily 06:00 UTC:
 
-A) 10:50  
-B) 10:35  
-C) 11:05  
-D) Cannot be determined
-
----
-
-## Task 3 — Output Mode Selection
-
-For each requirement, pick the correct output mode:
-
-| Requirement | Mode |
-|-------------|------|
-| Write only new events, no aggregations | ? |
-| Running total per region, emit only changes | ? |
-| Full leaderboard on every batch | ? |
-
----
-
-## Task 4 — Trigger Selection
-
-You want to process all backlog data incrementally using multiple micro-batches, then stop the query. Which trigger do you use?
-
-```python
-.trigger(___)
+# CRON for Monday 09:00 UTC:
 ```
 
 ---
 
-## Task 5 — Stream-Stream Join
-
-You need to join an `orders_stream` with a `payments_stream` where the payment must arrive within 30 minutes of the order. Fill in the blanks:
-
-```python
-orders_wm   = orders_stream.withWatermark("order_time",   "___")
-payments_wm = payments_stream.withWatermark("payment_time", "___")
-
-joined = orders_wm.join(
-    payments_wm,
-    F.expr("""
-        order_id = payment_order_id AND
-        payment_time BETWEEN order_time AND order_time + INTERVAL ___ MINUTES
-    """)
-)
-```
+## Task 4 — DLT Pipeline as Workflow Task
+1. Add the `orders_pipeline` DLT pipeline (from Day 4) as a task in your job.
+2. How do you pass a parameter from the job to a DLT pipeline task?
+3. What task types can a Databricks Workflow task be?
 
 ---
 
-## Task 6 — Monitoring
-
-After `query.awaitTermination()`, which attribute gives you metrics for the **last completed micro-batch**?
-
-A) `query.status`  
-B) `query.lastProgress`  
-C) `query.metrics`  
-D) `spark.streams.active`
-
----
-
-## Answers
-
-<details>
-<summary>Click to reveal</summary>
-
-**Task 1:** Tumbling = A, Sliding = B, Session = C
-
-**Task 2:** B — `10:35` (10:50 − 15 min)
-
-**Task 3:**
-| Requirement | Mode |
-|-------------|------|
-| New events, no aggs | append |
-| Running total, emit changes | update |
-| Full leaderboard | complete |
-
-**Task 4:** `availableNow=True`
-
-**Task 5:** Both watermarks should be ≥ 30 min; `INTERVAL 30 MINUTES`.
-Common safe choice: orders 10 min, payments 30 min.
-
-**Task 6:** B — `query.lastProgress`
-
-</details>
+## Task 5 — Concept Short-Answer
+1. What is the difference between a **Job cluster** and an **All-Purpose cluster** in the context of jobs?
+2. What does the **Run If** dependency condition allow you to do?
+3. How does **Retry on failure** work at the task level, and when should you be careful using it?
