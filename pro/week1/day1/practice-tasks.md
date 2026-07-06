@@ -38,18 +38,23 @@ DESCRIBE HISTORY training.prep.pro_d1_orders;
 
 ```python
 # Step 5: Read the actual transaction log JSON (Python)
-from delta.tables import DeltaTable
+# UC-safe version: read the Delta log from a path-based mirror table,
+# not from the Unity Catalog managed storage location.
+
 import json
 
-dt = DeltaTable.forName(spark, "training.prep.pro_d1_orders")
-detail = dt.detail().collect()[0]
-print("Table location:", detail['location'])
+log_inspect_path = "/tmp/pro_d1_orders_log_inspect"
 
-# Read log file 0 (CREATE)
-log_path = detail['location'] + "/_delta_log/00000000000000000000.json"
+spark.sql(f"""
+  CREATE OR REPLACE TABLE delta.`{log_inspect_path}` AS
+  SELECT * FROM training.prep.pro_d1_orders
+""")
+
+log_path = log_inspect_path + "/_delta_log/00000000000000000000.json"
 log_df = spark.read.text(log_path)
+
 for row in log_df.collect():
-    entry = json.loads(row['value'])
+    entry = json.loads(row["value"])
     print(json.dumps(entry, indent=2))
 ```
 
