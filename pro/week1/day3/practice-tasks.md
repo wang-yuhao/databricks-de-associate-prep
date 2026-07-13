@@ -18,6 +18,47 @@ Work through each task **in order** — each one builds on the last. Every task 
 
 ---
 
+## ⚠️ IMPORTANT: DLT Pipeline Setup Required
+
+**ERROR FIX: `ModuleNotFoundError: No module named 'dlt'`**
+
+You CANNOT run DLT code on regular Databricks clusters! DLT code must run within a **Delta Live Tables pipeline**.
+
+### How to Run These Tasks:
+
+**Step 1: Create a DLT Notebook**
+- In Databricks workspace, create a new notebook named `day3_dlt_pipeline`
+- Copy the DLT code from tasks below into this notebook
+
+**Step 2: Create a DLT Pipeline**
+1. Go to **Workflows** → **Delta Live Tables** → **Create Pipeline**
+2. Configure the pipeline:
+   - **Pipeline name**: `day3_practice_pipeline`
+   - **Notebook**: Select your `day3_dlt_pipeline` notebook  
+   - **Storage location**: `/mnt/dlt/day3_practice`
+   - **Target schema**: `your_catalog.your_schema` (Unity Catalog)
+   - **Pipeline mode**: Development
+   - **Cluster**: Fixed size, 1 worker
+
+**Step 3: Run the Pipeline**
+- Click **Start** to execute
+- Monitor in the pipeline UI
+- Check event log for data quality metrics
+
+**Alternative: Study for Exam Without Running**
+- Focus on understanding `@dlt.table`, `@dlt.expect*` decorators
+- Learn SCD Type 1 vs Type 2 differences  
+- Memorize DLT-specific syntax
+- Review exam traps and key takeaways
+
+| Regular Notebook | DLT Pipeline |
+|-----------------|-------------|
+| Runs on cluster | Runs in DLT Pipeline |
+| Manual CREATE TABLE | `@dlt.table` decorator |
+| Manual ordering | Auto dependency resolution |
+| Manual validation | Built-in expectations |
+
+
 ## Task 1 — DLT Pipeline Definition with Expectations
 
 📘 **Context**: The Professional exam tests your ability to create DLT pipelines with data quality rules using expectations. You must understand the difference between `@dlt.table`, `@dlt.view`, and `@expect` decorators.
