@@ -1,4 +1,4 @@
-# Day 3 Practice Tasks — Delta Lake Internals
+# Day 3 Practice Tasks — Lakeflow Declarative Pipelines (Advanced DLT)
 
 > **Exam section:** Data Transformation, Cleansing, and Quality (10%), Data Ingestion (25%)
 > **Prerequisite:** Read `study-notes.md` completely before starting these tasks.
@@ -11,349 +11,376 @@
 
 Work through each task **in order** — each one builds on the last. Every task has:
 
-- 📖 **Context** — why this matters for the exam
-- 🛠️ **Instructions** — what you must do, step by step
+- 📘 **Context** — why this matters for the exam
+- 🔧 **Instructions** — what you must do, step by step
 - ✅ **Expected outcome** — how to verify your answer
 - ⚠️ **Exam trap** — a common wrong-answer pitfall
 
 ---
 
-## Task 1 — Delta Table Inspection with DESCRIBE HISTORY & DETAIL
+## Task 1 — DLT Pipeline Definition with Expectations
 
-📖 **Context**: The Professional exam tests your ability to read Delta metadata. You must interpret `DESCRIBE HISTORY` and `DESCRIBE DETAIL` outputs.
+📘 **Context**: The Professional exam tests your ability to create DLT pipelines with data quality rules using expectations. You must understand the difference between `@dlt.table`, `@dlt.view`, and `@expect` decorators.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Create a test Delta table:
+### Step 1 — Create a DLT notebook with streaming table:
 
-```sql
-CREATE OR REPLACE TABLE training_uc.bronze.orders_clean (
-  order_id STRING,
-  customer_id STRING,
-  order_date DATE,
-  amount DECIMAL(10,2),
-  status STRING
-) USING DELTA;
+```python
+import dlt
+from pyspark.sql.functions import *
 
-INSERT INTO training_uc.bronze.orders_clean VALUES
-  ('ORD001', 'CUST123', '2025-01-01', 150.00, 'shipped'),
-  ('ORD002', 'CUST456', '2025-01-02', 250.00, 'delivered');
-
-UPDATE training_uc.bronze.orders_clean 
-SET status = 'cancelled' 
-WHERE order_id = 'ORD001';
-
-DELETE FROM training_uc.bronze.orders_clean 
-WHERE order_id = 'ORD002';
+@dlt.table(
+    name="bronze_orders",
+    comment="Raw orders ingested from cloud storage",
+    table_properties={
+        "quality": "bronze",
+        "pipelines.autoOptimize.zOrderCols": "order_date"
+    }
+)
+def bronze_orders():
+    return (
+        spark.readStream
+            .format("cloudFiles")
+            .option("cloudFiles.format", "json")
+            .option("cloudFiles.schemaLocation", "/mnt/schema/orders")
+            .load("/mnt/raw/orders/")
+    )
 ```
 
-### Step 2 — Inspect metadata:
+### Step 2 — Add silver table with expectations:
 
-```sql
-DESCRIBE HISTORY training_uc.bronze.orders_clean;
-DESCRIBE DETAIL training_uc.bronze.orders_clean;
+```python
+@dlt.table(
+    name="silver_orders",
+    comment="Cleaned orders with quality checks"
+)
+@dlt.expect_or_drop("valid_order_id", "order_id IS NOT NULL")
+@dlt.expect_or_fail("valid_amount", "amount > 0")
+@dlt.expect("valid_status", "status IN ('pending', 'shipped', 'delivered')")
+def silver_orders():
+    return (
+        dlt.read_stream("bronze_orders")
+            .select(
+                col("order_id"),
+                col("customer_id"),
+                col("amount").cast("decimal(10,2)"),
+                col("status"),
+                to_date(col("order_date")).alias("order_date")
+            )
+    )
 ```
 
-### Step 3 — Answer these:
+### Step 3 — Create gold aggregation:
 
-1. What does the `operation` column show for each transaction?
-2. What is in `operationParameters` for the UPDATE?
-3. How does `numFiles` change after each operation?
-4. What is the table's current `location` from DESCRIBE DETAIL?
-
-✅ **Expected outcome**: 
-- `DESCRIBE HISTORY` shows 4 operations: CREATE, WRITE, UPDATE, DELETE
-- `operationParameters` for UPDATE shows `{"predicate": "[...]"}`
-- `numFiles` increases with each write operation
-- `DESCRIBE DETAIL` shows metadata like location, format (delta), and partition columns
-
-⚠️ **Exam trap**: Thinking `DESCRIBE HISTORY` shows all versions forever. Wrong! History is retained based on `delta.logRetentionDuration` (default 30 days). After VACUUM, old history is removed.
-
----
-
-## Task 2 — Time Travel with VERSION AS OF and TIMESTAMP AS OF
-
-📖 **Context**: Time travel is THE most tested Delta Lake feature on the Professional exam. You must know VERSION AS OF vs TIMESTAMP AS OF.
-
-🛠️ **Instructions**:
-
-### Step 1 — Query historical versions:
-
-```sql
--- Query version 0 (initial state)
-SELECT * FROM training_uc.bronze.orders_clean VERSION AS OF 0;
-
--- Query version 1 (after first INSERT)
-SELECT * FROM training_uc.bronze.orders_clean VERSION AS OF 1;
-
--- Query as of yesterday (replace with your timestamp)
-SELECT * FROM training_uc.bronze.orders_clean TIMESTAMP AS OF '2025-01-15T10:00:00';
-```
-
-### Step 2 — Restore to previous version:
-
-```sql
-RESTORE TABLE training_uc.bronze.orders_clean TO VERSION AS OF 1;
-
-SELECT * FROM training_uc.bronze.orders_clean;
+```python
+@dlt.table(
+    name="gold_daily_revenue",
+    comment="Daily revenue aggregated from silver orders"
+)
+def gold_daily_revenue():
+    return (
+        dlt.read("silver_orders")
+            .groupBy("order_date")
+            .agg(
+                sum("amount").alias("total_revenue"),
+                count("order_id").alias("order_count"),
+                avg("amount").alias("avg_order_value")
+            )
+    )
 ```
 
 ✅ **Expected outcome**: 
-- VERSION AS OF 0 shows empty table (right after CREATE)
-- VERSION AS OF 1 shows 2 rows (after INSERT)
-- RESTORE brings back the 2 original rows, undoing UPDATE and DELETE
-- DESCRIBE HISTORY now shows a new RESTORE operation
+- Pipeline creates three tables: bronze_orders (streaming), silver_orders (with quality checks), gold_daily_revenue (aggregated)
+- Rows failing `expect_or_fail` will halt the pipeline
+- Rows failing `expect_or_drop` will be dropped
+- Rows failing `expect` will be recorded but still processed
 
-⚠️ **Exam trap**: Thinking RESTORE deletes future versions. Wrong! RESTORE creates a NEW version that restores old data. The history is never deleted (until VACUUM runs).
+⚠️ **Exam trap**: 
+- `@dlt.expect()` logs violations but doesn't drop rows
+- `@dlt.expect_or_drop()` drops invalid rows
+- `@dlt.expect_or_fail()` stops the pipeline on violations
+- Many candidates confuse these three behaviors!
 
 ---
 
-## Task 3 — MERGE INTO for Upserts and Deletes
+## Task 2 — Change Data Capture (CDC) with APPLY CHANGES INTO
 
-📖 **Context**: MERGE is critical for CDC (Change Data Capture) patterns. The Professional exam tests all three clauses: WHEN MATCHED UPDATE, WHEN NOT MATCHED INSERT, WHEN MATCHED DELETE.
+📘 **Context**: DLT provides `dlt.apply_changes()` for handling CDC from sources like Debezium or Delta CDF. The exam tests your understanding of SCD Type 1 vs Type 2.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Create update source:
+### Step 1 — Create bronze CDC stream:
 
-```sql
-CREATE OR REPLACE TEMP VIEW orders_updates AS
-SELECT 'ORD001' as order_id, 'CUST123' as customer_id, '2025-01-01' as order_date, 180.00 as amount, 'shipped' as status
-UNION ALL
-SELECT 'ORD002', 'CUST456', '2025-01-02', 250.00, 'deleted'
-UNION ALL
-SELECT 'ORD003', 'CUST789', '2025-01-03', 99.00, 'placed';
+```python
+@dlt.table(
+    name="bronze_customer_cdc",
+    comment="Raw CDC events from source system"
+)
+def bronze_customer_cdc():
+    return (
+        spark.readStream
+            .format("delta")
+            .option("readChangeFeed", "true")
+            .option("startingVersion", "0")
+            .table("source_catalog.source_schema.customers_cdc")
+    )
 ```
 
-### Step 2 — Write MERGE statement:
+### Step 2 — Apply changes with SCD Type 1:
 
-```sql
-MERGE INTO training_uc.bronze.orders_clean AS target
-USING orders_updates AS source
-ON target.order_id = source.order_id
-WHEN MATCHED AND source.status = 'deleted' THEN DELETE
-WHEN MATCHED AND source.status != 'deleted' THEN UPDATE SET
-  target.customer_id = source.customer_id,
-  target.order_date = source.order_date,
-  target.amount = source.amount,
-  target.status = source.status
-WHEN NOT MATCHED AND source.status != 'deleted' THEN INSERT (
-  order_id, customer_id, order_date, amount, status
-) VALUES (
-  source.order_id, source.customer_id, source.order_date, source.amount, source.status
-);
+```python
+dlt.create_streaming_table("silver_customers_scd1")
+
+dlt.apply_changes(
+    target="silver_customers_scd1",
+    source="bronze_customer_cdc",
+    keys=["customer_id"],
+    sequence_by=col("updated_timestamp"),
+    except_column_list=["_rescued_data"],
+    stored_as_scd_type="1"
+)
 ```
 
-### Step 3 — Verify results:
+### Step 3 — Apply changes with SCD Type 2:
 
-```sql
-SELECT * FROM training_uc.bronze.orders_clean ORDER BY order_id;
-DESCRIBE HISTORY training_uc.bronze.orders_clean;
+```python
+dlt.create_streaming_table("silver_customers_scd2")
+
+dlt.apply_changes(
+    target="silver_customers_scd2",
+    source="bronze_customer_cdc",
+    keys=["customer_id"],
+    sequence_by=col("updated_timestamp"),
+    stored_as_scd_type="2",
+    track_history_column_list=["email", "phone", "address"],
+    track_history_except_column_list=["last_login"]
+)
 ```
 
 ✅ **Expected outcome**: 
-- ORD001: amount updated from 150 to 180
-- ORD002: deleted
-- ORD003: inserted (new row)
-- DESCRIBE HISTORY shows a MERGE operation
+- SCD Type 1: Only current records, updates overwrite
+- SCD Type 2: Historical records preserved with __START_AT, __END_AT, __CURRENT columns
+- `sequence_by` ensures correct ordering of CDC events
 
-⚠️ **Exam trap**: The order of WHEN clauses matters! DELETE must come before UPDATE, or rows will be updated then deleted in the same operation. Also, forgetting `AND source.status != 'deleted'` in INSERT clause will try to insert deleted records.
+⚠️ **Exam trap**: 
+- SCD Type 1 = current state only (no history)
+- SCD Type 2 = full history with temporal columns
+- `sequence_by` is REQUIRED to handle out-of-order events
+- Without `sequence_by`, late-arriving updates may be ignored!
 
 ---
 
-## Task 4 — OPTIMIZE and Z-ORDER
+## Task 3 — DLT Pipeline Configuration and Deployment
 
-📖 **Context**: OPTIMIZE is the #1 way to improve Delta table performance. The exam tests when to use ZORDER and what it does.
+📘 **Context**: DLT pipelines require proper configuration for production use. The exam tests your knowledge of pipeline settings, refresh modes, and Unity Catalog integration.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Check file stats before optimization:
+### Step 1 — Create DLT pipeline via Databricks UI or CLI:
 
-```sql
-DESCRIBE DETAIL training_uc.bronze.orders_clean;
+```python
+# Pipeline configuration (as JSON for CLI deployment)
+{
+    "name": "orders_dlt_pipeline",
+    "storage": "/mnt/dlt/orders_pipeline",
+    "target": "prod_catalog.sales_schema",
+    "notebooks": [
+        {
+            "path": "/Workspace/Pipelines/orders_dlt_notebook"
+        }
+    ],
+    "configuration": {
+        "spark.databricks.delta.optimizeWrite.enabled": "true",
+        "spark.databricks.delta.autoCompact.enabled": "true",
+        "pipelines.trigger.interval": "5 minutes"
+    },
+    "clusters": [
+        {
+            "label": "default",
+            "num_workers": 2,
+            "node_type_id": "i3.xlarge",
+            "autoscale": {
+                "min_workers": 1,
+                "max_workers": 5
+            }
+        }
+    ],
+    "continuous": false,
+    "development": false,
+    "photon": true,
+    "channel": "CURRENT"
+}
 ```
 
-Note the `numFiles` value.
+### Step 2 — Understand refresh modes:
 
-### Step 2 — Run OPTIMIZE with ZORDER:
+```python
+# Full Refresh: Drop and recreate all tables
+# Triggered: Run once on demand or on schedule
+# Continuous: Keep pipeline running, process new data as it arrives
 
-```sql
-OPTIMIZE training_uc.bronze.orders_clean
-ZORDER BY (customer_id, order_date);
+# For exam:
+# - Full refresh = expensive, recreates everything
+# - Triggered = batch processing, cost-effective
+# - Continuous = real-time streaming, higher cost
 ```
 
-### Step 3 — Check stats after:
+### Step 3 — Deploy with Unity Catalog:
 
-```sql
-DESCRIBE DETAIL training_uc.bronze.orders_clean;
-DESCRIBE HISTORY training_uc.bronze.orders_clean;
-```
+```python
+# Specify Unity Catalog target in pipeline config
+"target": "main_catalog.analytics_schema"
 
-### Step 4 — Run VACUUM:
+# All DLT tables will be created as:
+# main_catalog.analytics_schema.bronze_orders
+# main_catalog.analytics_schema.silver_orders
+# main_catalog.analytics_schema.gold_daily_revenue
 
-```sql
--- First, check what would be removed (dry run)
-VACUUM training_uc.bronze.orders_clean RETAIN 168 HOURS DRY RUN;
-
--- Then actually vacuum
-VACUUM training_uc.bronze.orders_clean RETAIN 168 HOURS;
+# Unity Catalog provides:
+# - Fine-grained access control
+# - Data lineage tracking
+# - Audit logging
+# - Cross-workspace data sharing
 ```
 
 ✅ **Expected outcome**: 
-- OPTIMIZE reduces `numFiles` (compacts small files)
-- ZORDER co-locates data by customer_id and order_date for faster queries
-- VACUUM removes old Parquet files that are no longer referenced
-- VACUUM output shows number of files deleted
+- Pipeline deployed with Unity Catalog target
+- Tables accessible via 3-level namespace
+- Lineage visible in Unity Catalog UI
 
-⚠️ **Exam trap**: Running `VACUUM RETAIN 0 HOURS` breaks time travel! You cannot query old versions after VACUUM removes their files. Default retention is 7 days (168 hours). NEVER set to 0 in production.
-
----
-
-## Task 5 — DEEP CLONE vs SHALLOW CLONE
-
-📖 **Context**: The exam tests when to use DEEP vs SHALLOW clones. Key difference: DEEP copies data files, SHALLOW only copies metadata.
-
-🛠️ **Instructions**:
-
-### Step 1 — Create DEEP CLONE:
-
-```sql
-CREATE TABLE training_uc.bronze.orders_deep_clone
-DEEP CLONE training_uc.bronze.orders_clean;
-
-DESCRIBE DETAIL training_uc.bronze.orders_deep_clone;
-```
-
-### Step 2 — Create SHALLOW CLONE:
-
-```sql
-CREATE TABLE training_uc.bronze.orders_shallow_clone
-SHALLOW CLONE training_uc.bronze.orders_clean;
-
-DESCRIBE DETAIL training_uc.bronze.orders_shallow_clone;
-```
-
-### Step 3 — Compare locations:
-
-Notice that DEEP clone has its own `location`, while SHALLOW clone points to the original files.
-
-### Step 4 — Decision table:
-
-| Scenario | Clone Type | Reason |
-|----------|------------|--------|
-| Create a UAT copy for testing that needs independent history | DEEP CLONE | Data is copied; changes to UAT don't affect production |
-| Create a lightweight metadata snapshot for fast schema check | SHALLOW CLONE | No data copy; instant creation |
-| Replicate table to another workspace for DR | DEEP CLONE | Must copy data to separate location |
-| Create a quick dev snapshot for read-only testing | SHALLOW CLONE | Faster, cheaper, read-only is safe |
-
-✅ **Expected outcome**: 
-- DEEP clone takes longer and uses more storage
-- SHALLOW clone is instant
-- Both clones are independent tables in Unity Catalog
-
-⚠️ **Exam trap**: Thinking SHALLOW clone is a "view". Wrong! It's a full table with its own transaction log. It just references the original data files. If you VACUUM the source, SHALLOW clone may break.
+⚠️ **Exam trap**: 
+- `target` must specify Unity Catalog: `catalog.schema`
+- Without Unity Catalog, tables go to Hive metastore
+- `storage` location is for DLT metadata, NOT your tables
+- Continuous mode costs more than triggered mode!
 
 ---
 
-## Task 6 — Delta Transaction Log and Change Data Feed
+## Task 4 — DLT Event Log Analysis
 
-📖 **Context**: The exam tests understanding of `_delta_log` directory and Change Data Feed (CDF).
+📘 **Context**: DLT creates an event log for monitoring and debugging. The exam may ask you to query the event log to troubleshoot pipeline issues.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Enable Change Data Feed:
+### Step 1 — Query the DLT event log:
 
 ```sql
-ALTER TABLE training_uc.bronze.orders_clean
-SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+-- Event log is stored at: <storage_location>/system/events
+-- Query using SQL:
+
+SELECT 
+    timestamp,
+    details:flow_definition.output_dataset as dataset,
+    details:flow_definition.input_datasets as inputs,
+    details:flow_progress.metrics.num_output_rows as output_rows,
+    details:flow_progress.data_quality.dropped_records as dropped_records,
+    details:flow_progress.data_quality.expectations as expectations
+FROM 
+    delta.`/mnt/dlt/orders_pipeline/system/events`
+WHERE 
+    event_type = 'flow_progress'
+    AND timestamp > current_timestamp() - INTERVAL 1 DAY
+ORDER BY 
+    timestamp DESC;
 ```
 
-### Step 2 — Make some changes:
+### Step 2 — Monitor data quality metrics:
 
 ```sql
-INSERT INTO training_uc.bronze.orders_clean VALUES
-  ('ORD004', 'CUST999', '2025-01-04', 500.00, 'placed');
-
-UPDATE training_uc.bronze.orders_clean
-SET status = 'shipped'
-WHERE order_id = 'ORD004';
-
-DELETE FROM training_uc.bronze.orders_clean
-WHERE order_id = 'ORD001';
-```
-
-### Step 3 — Query Change Data Feed:
-
-```sql
-SELECT *
-FROM table_changes('training_uc.bronze.orders_clean', 2)
-ORDER BY _commit_version, _change_type;
+-- Check expectation violations:
+SELECT 
+    timestamp,
+    details:flow_definition.output_dataset as table_name,
+    explode(details:flow_progress.data_quality.expectations) as expectation,
+    expectation.name as rule_name,
+    expectation.passed_records,
+    expectation.failed_records
+FROM 
+    delta.`/mnt/dlt/orders_pipeline/system/events`
+WHERE 
+    event_type = 'flow_progress'
+    AND expectation.failed_records > 0
+ORDER BY 
+    timestamp DESC;
 ```
 
 ✅ **Expected outcome**: 
-- CDF output shows `_change_type` column: insert, update_preimage, update_postimage, delete
-- Each row has `_commit_version` and `_commit_timestamp`
-- You can see exactly what changed between versions
+- Event log shows all pipeline execution details
+- Data quality metrics track expectation violations
+- Flow progress shows input/output row counts
 
-⚠️ **Exam trap**: CDF must be enabled BEFORE changes happen. It doesn't retroactively track old changes. Also, CDF adds storage overhead (~20-30%), so only enable when needed.
-
----
-
-## Task 7 — Concept Quiz
-
-Answer these rapid-fire questions:
-
-1. What does `DESCRIBE HISTORY` show?
-2. What is the difference between VERSION AS OF and TIMESTAMP AS OF?
-3. Does RESTORE delete future versions?
-4. In MERGE, which clause should come first: DELETE or UPDATE?
-5. What does OPTIMIZE ZORDER BY do?
-6. What is the default VACUUM retention period?
-7. What happens if you VACUUM with RETAIN 0 HOURS?
-8. When should you use DEEP CLONE vs SHALLOW CLONE?
-9. Where is the Delta transaction log stored?
-10. What is Change Data Feed (CDF) used for?
+⚠️ **Exam trap**: 
+- Event log path is `<storage>/system/events`, NOT `<target>`
+- Use `delta.\`path\`` syntax to query by path
+- Event log structure uses nested JSON in `details` column
+- Must use `explode()` to access array elements!
 
 ---
 
-## Key Takeaways for the Exam
+## Concept Quiz
 
-✅ **Delta Metadata:**
-- `DESCRIBE HISTORY`: Shows operations (WRITE, UPDATE, DELETE, MERGE, OPTIMIZE, RESTORE)
-- `DESCRIBE DETAIL`: Shows table metadata (location, format, partitions, numFiles)
-- Transaction log is in `_delta_log/` directory (JSON files)
+1. What happens to rows that fail an `@dlt.expect_or_fail()` constraint?
+   - A) Rows are dropped silently
+   - B) Rows are logged but processed
+   - C) Pipeline stops immediately ✓
+   - D) Rows are quarantined to a separate table
 
-✅ **Time Travel:**
-- `VERSION AS OF n`: Query specific version number
-- `TIMESTAMP AS OF 'timestamp'`: Query at specific time
-- `RESTORE TABLE`: Creates new version with old data (doesn't delete history)
-- History retained for `delta.logRetentionDuration` (default 30 days)
+2. In DLT CDC with `apply_changes()`, what does `sequence_by` do?
+   - A) Sorts the output table
+   - B) Determines the order of CDC events for conflict resolution ✓
+   - C) Partitions the target table
+   - D) Creates a sequence number column
 
-✅ **MERGE:**
-- Supports INSERT, UPDATE, DELETE in one atomic operation
-- DELETE clause must come before UPDATE
-- Use for CDC (Change Data Capture) patterns
+3. What is the difference between SCD Type 1 and Type 2?
+   - A) Type 1 is faster than Type 2
+   - B) Type 1 keeps current state only, Type 2 keeps full history ✓
+   - C) Type 1 uses MERGE, Type 2 uses INSERT
+   - D) Type 1 is for streaming, Type 2 is for batch
 
-✅ **Optimization:**
-- `OPTIMIZE`: Compacts small files (bin-packing)
-- `ZORDER BY`: Co-locates data by specified columns for faster queries
-- `VACUUM`: Removes old data files no longer referenced
-- Default VACUUM retention: 7 days (168 hours)
-- NEVER use RETAIN 0 HOURS in production!
+4. Where is the DLT event log stored?
+   - A) In the target database
+   - B) In `<storage_location>/system/events` ✓
+   - C) In Databricks SQL warehouse
+   - D) In the Unity Catalog system schema
 
-✅ **Cloning:**
-- `DEEP CLONE`: Copies data files (independent table)
-- `SHALLOW CLONE`: Copies metadata only (references original files)
-- Use DEEP for production copies, SHALLOW for dev/test
-
-✅ **Change Data Feed:**
-- Must be enabled: `delta.enableChangeDataFeed = true`
-- Tracks insert, update_preimage, update_postimage, delete
-- Use `table_changes()` function to query changes
-- Only tracks changes AFTER enablement
+5. What does `continuous: true` mean in a DLT pipeline?
+   - A) Pipeline runs every minute
+   - B) Pipeline keeps running and processes new data immediately ✓
+   - C) Pipeline uses continuous optimization
+   - D) Pipeline never stops even on errors
 
 ---
 
-## Next Steps
+## Key Takeaways
 
-You've completed Day 3! You now understand Delta Lake internals at a professional level. Tomorrow (Day 4), you'll build on this with Delta Live Tables (DLT).
+✅ **For the exam, remember:**
+
+1. **DLT Expectations**: Three types with different behaviors
+   - `@dlt.expect()` = log only
+   - `@dlt.expect_or_drop()` = drop invalid rows
+   - `@dlt.expect_or_fail()` = stop pipeline
+
+2. **CDC with apply_changes()**:
+   - `sequence_by` is critical for handling out-of-order events
+   - SCD Type 1 = current state only
+   - SCD Type 2 = full history with temporal columns
+
+3. **Pipeline Configuration**:
+   - `target` = Unity Catalog destination (catalog.schema)
+   - `storage` = DLT metadata location
+   - Continuous vs Triggered vs Full Refresh modes
+
+4. **Event Log**:
+   - Located at `<storage>/system/events`
+   - Query with `delta.\`path\`` syntax
+   - Contains flow_progress, data_quality, and metrics
+
+5. **Unity Catalog Integration**:
+   - Use 3-level namespace: `catalog.schema.table`
+   - Provides lineage, access control, and audit
+   - Required for production DLT pipelines
+
+---
+
+**Next Steps**: Review `study-notes.md` again, focusing on DLT architecture and pipeline lifecycle. Practice creating DLT pipelines with different expectation types and CDC scenarios.
