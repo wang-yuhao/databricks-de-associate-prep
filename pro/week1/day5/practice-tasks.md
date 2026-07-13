@@ -1,7 +1,7 @@
-# Day 5 Practice Tasks — Workflows & Job Orchestration
+# Day 5 Practice Tasks — Advanced Structured Streaming
 
-> **Exam section:** Debugging and Deploying (10%), Infrastructure & CI/CD (20%)
-> **Prerequisite:** Read `study-notes.md` completely before starting these tasks.
+> **Exam section:** Data Processing (30%), Incremental Data Processing (20%)
+> **Prerequisite:** Read `study-notes.md` and complete Days 3-4 practice tasks.
 > **Estimated time:** 2-3 hours
 > **Difficulty:** 🔥🔥🔥 Professional Level
 
@@ -11,439 +11,552 @@
 
 Work through each task **in order** — each one builds on the last. Every task has:
 
-- 📖 **Context** — why this matters for the exam
-- 🛠️ **Instructions** — what you must do, step by step
+- 📘 **Context** — why this matters for the exam
+- 🔧 **Instructions** — what you must do, step by step
 - ✅ **Expected outcome** — how to verify your answer
 - ⚠️ **Exam trap** — a common wrong-answer pitfall
 
 ---
 
-## Task 1 — Multi-Task Job Design with Dependencies
+## Task 1 — Windowing and Watermarks in Streaming
 
-📖 **Context**: Databricks Workflows support multi-task jobs with dependencies. The Professional exam tests task dependency patterns and task types.
+📘 **Context**: The Professional exam tests your understanding of time-based aggregations in streaming. You must know the difference between event time, processing time, tumbling windows, sliding windows, and session windows.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Design the task DAG:
-
-You need to create a job with this dependency structure:
-
-```
-ingest_orders → validate_orders → transform_orders
-                                          ↓
-                                  load_gold_table → notify_success
-```
-
-### Step 2 — Create the job via UI:
-
-1. Go to **Workflows** > **Jobs**
-2. Click **Create Job**
-3. Name: `orders_etl_pipeline`
-4. Add these tasks:
-
-**Task 1: ingest_orders**
-- Type: Notebook
-- Notebook: Create `/pro/week1/notebooks/ingest_orders`
-- Cluster: New job cluster (Standard DS3 v2)
-- Depends on: None
-
-**Task 2: validate_orders**
-- Type: Notebook
-- Notebook: Create `/pro/week1/notebooks/validate_orders`
-- Cluster: Same as Task 1
-- Depends on: `ingest_orders`
-
-**Task 3: transform_orders**
-- Type: Notebook
-- Notebook: Create `/pro/week1/notebooks/transform_orders`
-- Cluster: Same as Task 1
-- Depends on: `validate_orders`
-
-**Task 4: load_gold_table**
-- Type: SQL
-- Query: `INSERT INTO training_uc.gold.orders_summary SELECT * FROM training_uc.silver.orders_transformed`
-- Warehouse: Serverless SQL Warehouse
-- Depends on: `transform_orders`
-
-**Task 5: notify_success**
-- Type: Webhook (email notification)
-- URL: Your email webhook
-- Depends on: `load_gold_table`
-
-### Step 3 — Understand task types:
-
-| Task Type | Use Case | Cluster Type |
-|-----------|----------|-------------|
-| **Notebook** | Python/Scala/R code | Job cluster or All-Purpose |
-| **SQL** | SQL queries | SQL Warehouse (recommended) |
-| **DLT Pipeline** | Declarative data pipelines | Managed by DLT |
-| **Python script** | Standalone .py files | Job cluster |
-| **JAR** | Java/Scala JARs | Job cluster |
-
-✅ **Expected outcome**: 
-- Job creates a DAG with 5 tasks
-- Tasks run in correct dependency order
-- Shared job cluster reduces costs (vs separate clusters)
-- SQL task uses Serverless (no cluster startup time)
-
-⚠️ **Exam trap**: Thinking tasks run in parallel by default. Wrong! Tasks run sequentially unless they have no dependencies. `ingest_orders` and `validate_orders` run sequentially, but if both depended on nothing, they'd run in parallel.
-
----
-
-## Task 2 — Repair Run After Failure
-
-📖 **Context**: Repair Run is THE most tested Workflow feature. It re-runs only failed tasks without re-running upstream tasks.
-
-🛠️ **Instructions**:
-
-### Step 1 — Simulate a failure:
-
-In the `validate_orders` notebook, add this code:
+### Step 1 — Create a streaming source with event timestamps:
 
 ```python
-# Intentionally raise an error
-raise ValueError("Validation failed: missing required columns")
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+# Define schema for streaming data
+schema = StructType([
+    StructField("user_id", IntegerType(), True),
+    StructField("event_type", StringType(), True),
+    StructField("event_timestamp", TimestampType(), True),
+    StructField("value", DoubleType(), True)
+])
+
+# Read streaming data
+streaming_df = (
+    spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.schemaLocation", "/mnt/streaming/event_schema")
+        .schema(schema)
+        .load("/mnt/streaming/events/")
+)
 ```
 
-### Step 2 — Run the job:
-
-1. Click **Run Now**
-2. Observe that `ingest_orders` succeeds
-3. Observe that `validate_orders` fails
-4. Observe that `transform_orders`, `load_gold_table`, and `notify_success` are SKIPPED
-
-### Step 3 — Fix the error:
-
-Remove the `raise ValueError()` line and add proper validation:
+### Step 2 — Apply tumbling window aggregation:
 
 ```python
-from pyspark.sql.functions import col
+# Tumbling window: Non-overlapping fixed-size windows
+tumbling_agg = (
+    streaming_df
+        .withWatermark("event_timestamp", "10 minutes")
+        .groupBy(
+            window(col("event_timestamp"), "5 minutes"),
+            col("event_type")
+        )
+        .agg(
+            count("*").alias("event_count"),
+            sum("value").alias("total_value"),
+            avg("value").alias("avg_value")
+        )
+)
 
-# Read from Bronze
-df = spark.read.table("training_uc.bronze.orders")
-
-# Validate required columns exist
-required_cols = ["order_id", "customer_id", "amount", "status"]
-for col_name in required_cols:
-    if col_name not in df.columns:
-        raise ValueError(f"Missing required column: {col_name}")
-
-# Write validated data to Silver
-df.write.mode("overwrite").saveAsTable("training_uc.silver.orders_validated")
-
-print("✅ Validation passed!")
+# Write to Delta table with Unity Catalog
+(
+    tumbling_agg.writeStream
+        .format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", "/mnt/checkpoints/tumbling_events")
+        .toTable("main_catalog.streaming_schema.tumbling_events")
+)
 ```
 
-### Step 4 — Use Repair Run:
-
-1. Go to the failed run in the job history
-2. Click **Repair Run**
-3. Select **Re-run failed and skipped tasks**
-4. Click **Repair Run**
-
-✅ **Expected outcome**: 
-- Repair Run SKIPS `ingest_orders` (already succeeded)
-- Repair Run RE-RUNS `validate_orders` (failed)
-- Repair Run RUNS `transform_orders`, `load_gold_table`, `notify_success` (were skipped)
-- Total run time is much shorter (no ingestion re-run)
-
-⚠️ **Exam trap**: Thinking Repair Run always re-runs ALL tasks. Wrong! Repair Run only re-runs failed and downstream tasks. Upstream successful tasks are NOT re-run.
-
----
-
-## Task 3 — Schedule with CRON Expressions
-
-📖 **Context**: The exam tests your ability to write CRON expressions for job scheduling.
-
-🛠️ **Instructions**:
-
-### Step 1 — Schedule daily at 06:00 UTC:
-
-1. In your job, click **Add Trigger**
-2. Select **Scheduled**
-3. Set trigger: **CRON**
-4. Enter expression: `0 0 6 * * ?`
-5. Timezone: **UTC**
-
-### Step 2 — CRON expression format:
-
-```
-CRON: <second> <minute> <hour> <day-of-month> <month> <day-of-week>
-
-Examples:
-0 0 6 * * ?     → Every day at 06:00 UTC
-0 30 9 * * MON  → Every Monday at 09:30 UTC
-0 0 12 1 * ?    → First day of every month at 12:00 UTC
-0 0 */4 * * ?   → Every 4 hours
-```
-
-### Step 3 — Add email notification:
-
-1. In job settings, click **Notifications**
-2. **On Failure**: Add `yuhao2804@gmail.com`
-3. **On Success**: (optional) Add email
-4. **No Alert for Skipped Runs**: Check this box
-
-✅ **Expected outcome**: 
-- Job runs automatically at 06:00 UTC every day
-- Email sent only on failure (unless success notifications enabled)
-- `no_alert_for_skipped_runs` prevents noise from skipped tasks
-
-⚠️ **Exam trap**: Forgetting the `?` for unused fields in CRON. `0 0 6 * * *` is INVALID. Use `0 0 6 * * ?` for "any day of week".
-
----
-
-## Task 4 — Job Cluster vs All-Purpose Cluster
-
-📖 **Context**: The exam tests when to use Job clusters vs All-Purpose clusters. This impacts cost significantly.
-
-🛠️ **Instructions**:
-
-### Decision Matrix:
-
-| Scenario | Cluster Type | Reason |
-|----------|--------------|--------|
-| Production ETL job running daily | Job Cluster | Created per run, cheaper, terminates automatically |
-| Ad-hoc notebook development | All-Purpose | Stays running, interactive mode |
-| Scheduled report generation | Job Cluster | No need for persistent cluster |
-| Interactive data exploration | All-Purpose | Need persistent session |
-| CI/CD pipeline testing | Job Cluster | Clean environment per test |
-
-### Key differences:
-
-| Feature | Job Cluster | All-Purpose Cluster |
-|---------|-------------|---------------------|
-| **Created** | Per job run | Manually by user |
-| **Lifetime** | Terminates after job | Stays running until manually stopped |
-| **Cost** | ~50% cheaper (DBU cost) | Full DBU cost |
-| **Sharing** | Single job | Multiple users/notebooks |
-| **Use Case** | Production jobs | Development/exploration |
-
-### Step 1 — Configure job cluster:
-
-```json
-{
-  "new_cluster": {
-    "spark_version": "13.3.x-scala2.12",
-    "node_type_id": "Standard_DS3_v2",
-    "num_workers": 2,
-    "autotermination_minutes": 15
-  }
-}
-```
-
-✅ **Expected outcome**: 
-- Job cluster created when job starts
-- Cluster terminates 15 minutes after job completes
-- Significant cost savings vs All-Purpose cluster
-
-⚠️ **Exam trap**: Using All-Purpose clusters for production jobs. Wrong! This costs ~2x more. Always use Job clusters for scheduled jobs.
-
----
-
-## Task 5 — DLT Pipeline as Workflow Task
-
-📖 **Context**: The exam tests integrating DLT pipelines into multi-task jobs.
-
-🛠️ **Instructions**:
-
-### Step 1 — Add DLT task to job:
-
-1. In your job, click **Add Task**
-2. Task type: **Delta Live Tables Pipeline**
-3. Pipeline: Select `orders_dlt_pipeline` (from Day 4)
-4. Depends on: `ingest_orders`
-
-### Step 2 — Pass parameters to DLT:
-
-DLT pipelines accept parameters via the job configuration:
-
-```json
-{
-  "pipeline_task": {
-    "pipeline_id": "<your-pipeline-id>",
-    "full_refresh": false
-  },
-  "base_parameters": {
-    "catalog": "training_uc",
-    "schema": "bronze"
-  }
-}
-```
-
-Access parameters in DLT notebook:
+### Step 3 — Apply sliding window aggregation:
 
 ```python
-import dlt
+# Sliding window: Overlapping windows
+sliding_agg = (
+    streaming_df
+        .withWatermark("event_timestamp", "10 minutes")
+        .groupBy(
+            window(
+                col("event_timestamp"), 
+                "10 minutes",  # window duration
+                "5 minutes"    # slide interval
+            ),
+            col("event_type")
+        )
+        .agg(
+            count("*").alias("event_count"),
+            max("value").alias("max_value")
+        )
+)
 
-catalog = spark.conf.get("catalog", "default_catalog")
-schema = spark.conf.get("schema", "default_schema")
-
-@dlt.table()
-def my_table():
-    return spark.read.table(f"{catalog}.{schema}.source_table")
+(
+    sliding_agg.writeStream
+        .format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", "/mnt/checkpoints/sliding_events")
+        .toTable("main_catalog.streaming_schema.sliding_events")
+)
 ```
 
-### Step 3 — Understand task types:
-
-| Task Type | Configuration | Output |
-|-----------|---------------|--------|
-| **Notebook Task** | Notebook path + parameters | Cell outputs |
-| **DLT Pipeline** | Pipeline ID + full_refresh | Event log |
-| **SQL Task** | Query or Dashboard | Query results |
-| **Python Script** | .py file path | Script stdout |
-
 ✅ **Expected outcome**: 
-- DLT pipeline runs as part of multi-task job
-- Parameters passed from job to pipeline
-- Job waits for DLT pipeline to complete before running downstream tasks
+- Tumbling windows: Each event belongs to exactly ONE window
+- Sliding windows: Each event can belong to MULTIPLE overlapping windows
+- Watermark defines how late data can arrive (10 minutes in this case)
+- `outputMode("append")` works with watermarks to finalize windows
 
-⚠️ **Exam trap**: Thinking DLT pipelines cannot be part of multi-task jobs. Wrong! DLT is a valid task type and can have dependencies like any other task.
+⚠️ **Exam trap**: 
+- Tumbling = `window(col, "5 minutes")` — no slide interval
+- Sliding = `window(col, "10 minutes", "5 minutes")` — with slide interval
+- Watermark MUST be set before groupBy for late data handling
+- Without watermark, state grows indefinitely!
+- `outputMode("complete")` NOT supported with watermarks
 
 ---
 
-## Task 6 — Conditional Task Execution with Run If
+## Task 2 — Stateful Streaming with mapGroupsWithState
 
-📖 **Context**: The Professional exam tests conditional task execution using **Run If** conditions.
+📘 **Context**: Advanced streaming scenarios require maintaining state across micro-batches. The exam tests `mapGroupsWithState` and `flatMapGroupsWithState` for custom stateful operations.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Create conditional task:
-
-1. Add a new task: `send_failure_alert`
-2. Type: Webhook (email)
-3. Depends on: `validate_orders`
-4. **Run If**: `At least one upstream task failed`
-
-### Step 2 — Understand Run If options:
-
-| Run If Condition | When Task Runs |
-|------------------|----------------|
-| **All upstream tasks succeeded** | Only if ALL dependencies succeed |
-| **At least one upstream task failed** | If ANY dependency fails |
-| **All upstream tasks completed** | Regardless of success/failure |
-
-### Example Use Cases:
-
-```
-ingest_data → validate_data → transform_data
-                    ↓
-            (Run If: Failed)
-         send_failure_alert
-```
-
-- `send_failure_alert` runs ONLY if `validate_data` fails
-- `transform_data` runs ONLY if `validate_data` succeeds
-
-✅ **Expected outcome**: 
-- Failure alert task runs only when validation fails
-- This enables error handling without changing notebook code
-
-⚠️ **Exam trap**: Thinking Run If applies to ALL upstream tasks. Wrong! Run If evaluates DIRECT dependencies only (tasks in `depends_on`).
-
----
-
-## Task 7 — Retry on Failure Configuration
-
-📖 **Context**: The exam tests when to enable retry and what the risks are.
-
-🛠️ **Instructions**:
-
-### Step 1 — Configure retry:
-
-1. In task settings, expand **Advanced options**
-2. **Max Retries**: 3
-3. **Retry on Timeout**: Enabled
-
-### Step 2 — When to use retry:
-
-| Scenario | Retry? | Reason |
-|----------|--------|--------|
-| API call to external service | YES | Transient network errors |
-| Writing to Delta table | YES | Concurrent write conflicts |
-| Sending duplicate transactions | NO | Risk of duplicates |
-| Idempotent ETL | YES | Safe to re-run |
-| Non-idempotent operations (e.g., POST to external API) | NO | May create duplicates |
-
-### Step 3 — Best practices:
+### Step 1 — Define state and event classes:
 
 ```python
-# ✅ GOOD: Idempotent write (safe to retry)
-df.write.mode("overwrite").saveAsTable("target_table")
+from pyspark.sql.streaming import GroupState, GroupStateTimeout
+from dataclasses import dataclass
+from typing import Iterator, Tuple
 
-# ✅ GOOD: Merge is idempotent
-target.merge(source, "id") \
-    .whenMatchedUpdateAll() \
-    .whenNotMatchedInsertAll() \
-    .execute()
+@dataclass
+class UserSession:
+    user_id: int
+    session_start: int  # timestamp in seconds
+    session_end: int
+    event_count: int
+    total_value: float
 
-# ❌ BAD: Append without deduplication (creates duplicates on retry)
-df.write.mode("append").saveAsTable("target_table")
+@dataclass
+class Event:
+    user_id: int
+    event_type: str
+    event_timestamp: int  # timestamp in seconds
+    value: float
+```
 
-# ❌ BAD: Sending email on every retry
-send_email("Job completed")  # May send multiple emails
+### Step 2 — Implement stateful session aggregation:
+
+```python
+def update_session_state(
+    user_id: int,
+    events: Iterator[Event],
+    state: GroupState
+) -> Iterator[UserSession]:
+    """
+    Maintains session state per user with 30-minute timeout.
+    """
+    
+    # Get existing state or initialize
+    if state.exists:
+        session = state.get
+    else:
+        session = UserSession(
+            user_id=user_id,
+            session_start=0,
+            session_end=0,
+            event_count=0,
+            total_value=0.0
+        )
+    
+    # Process new events
+    event_list = list(events)
+    if len(event_list) > 0:
+        for event in event_list:
+            # Update session
+            if session.session_start == 0:
+                session.session_start = event.event_timestamp
+            session.session_end = event.event_timestamp
+            session.event_count += 1
+            session.total_value += event.value
+        
+        # Update state
+        state.update(session)
+        state.setTimeoutDuration("30 minutes")
+    
+    # Check for timeout
+    if state.hasTimedOut:
+        # Emit final session and remove state
+        result = session
+        state.remove()
+        yield result
+    elif state.exists:
+        # Emit intermediate session (optional)
+        yield session
+
+# Apply stateful transformation
+session_stream = (
+    streaming_df
+        .selectExpr(
+            "user_id",
+            "event_type",
+            "CAST(UNIX_TIMESTAMP(event_timestamp) AS INT) as event_timestamp",
+            "value"
+        )
+        .as[(int, str, int, float)]
+        .groupByKey(lambda x: x[0])  # Group by user_id
+        .mapGroupsWithState(
+            update_session_state,
+            GroupStateTimeout.ProcessingTimeTimeout
+        )
+)
+```
+
+### Step 3 — Write stateful stream to Delta:
+
+```python
+(
+    session_stream.writeStream
+        .format("delta")
+        .outputMode("update")
+        .option("checkpointLocation", "/mnt/checkpoints/user_sessions")
+        .toTable("main_catalog.streaming_schema.user_sessions")
+)
 ```
 
 ✅ **Expected outcome**: 
-- Failed task retries up to 3 times
-- Idempotent operations are safe to retry
-- Non-idempotent operations (like sending emails) should not use retry
+- Custom state maintained per user across micro-batches
+- Session timeout triggers final aggregation
+- State is persisted in checkpoint location
+- Can handle complex business logic beyond standard aggregations
 
-⚠️ **Exam trap**: Enabling retry for ALL tasks. Wrong! Only enable retry for idempotent operations. Non-idempotent tasks (like sending notifications) should NOT retry.
-
----
-
-## Task 8 — Concept Quiz
-
-Answer these rapid-fire questions:
-
-1. What is the difference between a Job cluster and an All-Purpose cluster?
-2. What does **Repair Run** do?
-3. What CRON expression runs every Monday at 09:00 UTC?
-4. What task types can a Databricks Workflow contain?
-5. How do you pass parameters to a DLT pipeline task?
-6. What does **Run If: At least one upstream task failed** mean?
-7. When should you enable **Retry on Failure**?
-8. Do tasks run in parallel by default?
-9. What is the cost difference between Job cluster and All-Purpose cluster?
-10. What happens to a Job cluster after the job completes?
+⚠️ **Exam trap**: 
+- `mapGroupsWithState` requires `update` or `append` output mode
+- Must set timeout: `ProcessingTimeTimeout` or `EventTimeTimeout`
+- State size grows with number of groups — monitor memory!
+- Checkpoint location MUST be specified for state recovery
+- State is NOT automatically cleaned without timeout
 
 ---
 
-## Key Takeaways for the Exam
+## Task 3 — Stream-Stream Joins with Watermarks
 
-✅ **Job Design:**
-- **Task Types**: Notebook, SQL, DLT Pipeline, Python script, JAR
-- **Dependencies**: Use `depends_on` to create task DAGs
-- **Parallelism**: Tasks with no dependencies run in parallel
-- **Repair Run**: Re-runs failed and downstream tasks, SKIPS successful upstream tasks
+📘 **Context**: Joining two streaming DataFrames requires watermarks on both sides. The exam tests your understanding of join conditions, state management, and late data handling.
 
-✅ **Clusters:**
-- **Job Cluster**: Created per run, ~50% cheaper, auto-terminates
-- **All-Purpose Cluster**: Persistent, more expensive, for development
-- **Always use Job clusters for production jobs**
+🔧 **Instructions**:
 
-✅ **Scheduling:**
-- **CRON format**: `<second> <minute> <hour> <day> <month> <day-of-week>`
-- **Examples**: `0 0 6 * * ?` (daily at 06:00), `0 30 9 * * MON` (Monday 09:30)
-- **Notifications**: Email on failure, success, or both
+### Step 1 — Create two streaming sources:
 
-✅ **Advanced Features:**
-- **Run If**: Conditional task execution based on upstream status
-- **Retry**: Enable only for idempotent operations
-- **Parameters**: Pass via `base_parameters` in job config
-- **DLT Integration**: DLT pipelines can be tasks in multi-task jobs
+```python
+# Stream 1: User clicks
+clicks_stream = (
+    spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.schemaLocation", "/mnt/streaming/clicks_schema")
+        .load("/mnt/streaming/clicks/")
+        .select(
+            col("user_id").cast("int"),
+            col("click_timestamp").cast("timestamp"),
+            col("page_id").cast("string")
+        )
+        .withWatermark("click_timestamp", "10 minutes")
+)
 
-✅ **Best Practices:**
-- Use shared job clusters to reduce costs
-- Enable retry only for idempotent tasks
-- Use `no_alert_for_skipped_runs` to reduce notification noise
-- Use Repair Run instead of full re-runs
+# Stream 2: User purchases
+purchases_stream = (
+    spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.schemaLocation", "/mnt/streaming/purchases_schema")
+        .load("/mnt/streaming/purchases/")
+        .select(
+            col("user_id").cast("int"),
+            col("purchase_timestamp").cast("timestamp"),
+            col("amount").cast("decimal(10,2)")
+        )
+        .withWatermark("purchase_timestamp", "10 minutes")
+)
+```
+
+### Step 2 — Perform stream-stream inner join:
+
+```python
+# Inner join with time constraint
+joined_stream = (
+    clicks_stream.alias("c")
+        .join(
+            purchases_stream.alias("p"),
+            expr("""
+                c.user_id = p.user_id AND
+                p.purchase_timestamp >= c.click_timestamp AND
+                p.purchase_timestamp <= c.click_timestamp + INTERVAL 1 HOUR
+            """),
+            "inner"
+        )
+        .select(
+            col("c.user_id"),
+            col("c.click_timestamp"),
+            col("c.page_id"),
+            col("p.purchase_timestamp"),
+            col("p.amount")
+        )
+)
+
+(
+    joined_stream.writeStream
+        .format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", "/mnt/checkpoints/click_purchase_join")
+        .toTable("main_catalog.streaming_schema.click_purchase_attribution")
+)
+```
+
+### Step 3 — Perform stream-stream left outer join:
+
+```python
+# Left outer join to capture clicks without purchases
+left_joined_stream = (
+    clicks_stream.alias("c")
+        .join(
+            purchases_stream.alias("p"),
+            expr("""
+                c.user_id = p.user_id AND
+                p.purchase_timestamp >= c.click_timestamp AND
+                p.purchase_timestamp <= c.click_timestamp + INTERVAL 1 HOUR
+            """),
+            "leftOuter"
+        )
+        .select(
+            col("c.user_id"),
+            col("c.click_timestamp"),
+            col("c.page_id"),
+            col("p.purchase_timestamp"),
+            col("p.amount"),
+            when(col("p.purchase_timestamp").isNull(), lit(False))
+                .otherwise(lit(True))
+                .alias("converted")
+        )
+)
+
+(
+    left_joined_stream.writeStream
+        .format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", "/mnt/checkpoints/click_conversion")
+        .toTable("main_catalog.streaming_schema.click_conversions")
+)
+```
+
+✅ **Expected outcome**: 
+- Stream-stream joins require watermarks on BOTH sides
+- Time constraints prevent unbounded state growth
+- Inner join emits only when both events match
+- Left outer join emits clicks even without matching purchases
+
+⚠️ **Exam trap**: 
+- MUST have watermarks on both streams for stream-stream joins
+- MUST have time constraints in join condition to bound state
+- Without time constraint, state grows forever
+- `outputMode("complete")` NOT supported for stream-stream joins
+- Late data outside watermark is dropped from join
 
 ---
 
-## Next Steps
+## Task 4 — Streaming Deduplication and Foreachbatch
 
-You've completed Day 5! You now understand Databricks Workflows at a professional level. You've completed Week 1 of the Professional exam prep! 🎉
+📘 **Context**: Real-world streams often have duplicates. The exam tests deduplication strategies using `dropDuplicates()` with watermarks and custom logic with `foreachBatch()`.
 
-Next week (Days 6-7), you'll cover advanced topics and practice for the exam.
+🔧 **Instructions**:
+
+### Step 1 — Deduplicate streaming data:
+
+```python
+# Deduplicate based on event_id within watermark window
+deduplicated_stream = (
+    streaming_df
+        .withWatermark("event_timestamp", "1 hour")
+        .dropDuplicates(["event_id", "user_id"])
+)
+
+(
+    deduplicated_stream.writeStream
+        .format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", "/mnt/checkpoints/deduped_events")
+        .toTable("main_catalog.streaming_schema.deduped_events")
+)
+```
+
+### Step 2 — Use foreachBatch for custom processing:
+
+```python
+def process_batch(batch_df, batch_id):
+    """
+    Custom batch processing with complex logic.
+    Can perform multiple writes, call external APIs, etc.
+    """
+    # Example: Write to multiple tables based on event type
+    
+    # Filter high-value events
+    high_value = batch_df.filter(col("value") > 1000)
+    high_value.write \
+        .format("delta") \
+        .mode("append") \
+        .saveAsTable("main_catalog.streaming_schema.high_value_events")
+    
+    # Filter low-value events  
+    low_value = batch_df.filter(col("value") <= 1000)
+    low_value.write \
+        .format("delta") \
+        .mode("append") \
+        .saveAsTable("main_catalog.streaming_schema.low_value_events")
+    
+    # Optional: Call external API for high-value events
+    if high_value.count() > 0:
+        # Send notification, update external system, etc.
+        pass
+
+# Apply foreachBatch
+(
+    streaming_df.writeStream
+        .foreachBatch(process_batch)
+        .option("checkpointLocation", "/mnt/checkpoints/custom_batch")
+        .start()
+)
+```
+
+### Step 3 — Implement idempotent writes with MERGE:
+
+```python
+from delta.tables import DeltaTable
+
+def upsert_batch(batch_df, batch_id):
+    """
+    Idempotent upsert using Delta MERGE.
+    Prevents duplicate processing if batch is retried.
+    """
+    # Create or get Delta table
+    delta_table = DeltaTable.forName(spark, "main_catalog.streaming_schema.unique_users")
+    
+    # Perform MERGE for upsert
+    (
+        delta_table.alias("target")
+            .merge(
+                batch_df.alias("source"),
+                "target.user_id = source.user_id"
+            )
+            .whenMatchedUpdate(set={
+                "last_event_timestamp": col("source.event_timestamp"),
+                "event_count": col("target.event_count") + 1,
+                "total_value": col("target.total_value") + col("source.value")
+            })
+            .whenNotMatchedInsert(values={
+                "user_id": col("source.user_id"),
+                "last_event_timestamp": col("source.event_timestamp"),
+                "event_count": lit(1),
+                "total_value": col("source.value")
+            })
+            .execute()
+    )
+
+(
+    streaming_df.writeStream
+        .foreachBatch(upsert_batch)
+        .option("checkpointLocation", "/mnt/checkpoints/user_upsert")
+        .start()
+)
+```
+
+✅ **Expected outcome**: 
+- `dropDuplicates()` with watermark prevents duplicate events
+- `foreachBatch()` enables custom batch-level logic
+- MERGE provides idempotent writes for exactly-once semantics
+- Can write to multiple sinks in single batch
+
+⚠️ **Exam trap**: 
+- `dropDuplicates()` requires watermark to bound state size
+- `foreachBatch()` receives batch DataFrame, NOT streaming DF
+- Inside `foreachBatch()`, use batch write APIs (not writeStream)
+- MERGE ensures idempotency for streaming upserts
+- Batch processing breaks exactly-once if not idempotent
+
+---
+
+## Concept Quiz
+
+1. What is the difference between tumbling and sliding windows?
+   - A) Tumbling is faster
+   - B) Tumbling windows don't overlap, sliding windows do ✓
+   - C) Tumbling uses event time, sliding uses processing time
+   - D) No difference, just syntax
+
+2. What happens if you don't set a watermark on a streaming aggregation?
+   - A) Pipeline fails immediately
+   - B) State grows indefinitely and causes OOM ✓
+   - C) Late data is automatically handled
+   - D) Aggregations are computed incorrectly
+
+3. For stream-stream joins, what is REQUIRED?
+   - A) Watermarks on both streams and time constraint in join ✓
+   - B) Only watermark on left stream
+   - C) Complete output mode
+   - D) Spark version 3.5+
+
+4. What is the purpose of `foreachBatch()`?
+   - A) Optimize batch size
+   - B) Enable custom logic and multiple writes per batch ✓
+   - C) Improve checkpoint performance
+   - D) Replace watermark functionality
+
+5. How does `dropDuplicates()` prevent unbounded state growth?
+   - A) Automatic state cleanup every hour
+   - B) Requires watermark to define state retention ✓
+   - C) Doesn't need state management
+   - D) Uses processing time automatically
+
+---
+
+## Key Takeaways
+
+✅ **For the exam, remember:**
+
+1. **Windows and Watermarks**:
+   - Tumbling: `window(col, "5 minutes")` — non-overlapping
+   - Sliding: `window(col, "10 minutes", "5 minutes")` — overlapping
+   - Watermark: `.withWatermark(col, "10 minutes")` before groupBy
+   - Watermark prevents unbounded state growth
+
+2. **Stateful Operations**:
+   - `mapGroupsWithState`: Custom state per group
+   - Requires timeout: ProcessingTimeTimeout or EventTimeTimeout
+   - Must use `update` or `append` output mode
+   - State persisted in checkpoint location
+
+3. **Stream-Stream Joins**:
+   - MUST have watermarks on BOTH streams
+   - MUST have time constraint to bound state
+   - Inner join: Only matched events
+   - Left outer join: All left events + matched right
+   - `append` output mode only
+
+4. **Deduplication and Custom Processing**:
+   - `dropDuplicates()` needs watermark for state management
+   - `foreachBatch()` enables complex custom logic
+   - Use MERGE for idempotent upserts
+   - Multiple writes possible in foreachBatch
+
+5. **Output Modes**:
+   - `append`: Only new rows (default, works with watermarks)
+   - `update`: New and updated rows (stateful operations)
+   - `complete`: All rows (NOT supported with watermarks/joins)
+
+---
+
+**Next Steps**: Review `study-notes.md` focusing on streaming concepts. Practice with different window types, stateful transformations, and understand when to use each pattern.
