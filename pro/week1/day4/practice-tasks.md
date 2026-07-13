@@ -1,7 +1,7 @@
-# Day 4 Practice Tasks — Delta Live Tables (DLT)
+# Day 4 Practice Tasks — Delta Live Tables CDC (Change Data Capture)
 
 > **Exam section:** Data Pipelines (40%), Data Transformation, Cleansing, and Quality (10%)
-> **Prerequisite:** Read `study-notes.md` completely before starting these tasks.
+> **Prerequisite:** Read `study-notes.md` and complete Day 3 practice tasks.
 > **Estimated time:** 2-3 hours
 > **Difficulty:** 🔥🔥🔥 Professional Level
 
@@ -11,364 +11,453 @@
 
 Work through each task **in order** — each one builds on the last. Every task has:
 
-- 📖 **Context** — why this matters for the exam
-- 🛠️ **Instructions** — what you must do, step by step
+- 📘 **Context** — why this matters for the exam
+- 🔧 **Instructions** — what you must do, step by step
 - ✅ **Expected outcome** — how to verify your answer
 - ⚠️ **Exam trap** — a common wrong-answer pitfall
 
 ---
 
-## Task 1 — Bronze Table with Auto Loader
+## Task 1 — CDC with APPLY CHANGES INTO (SCD Type 1)
 
-📖 **Context**: DLT Bronze tables use Auto Loader for incremental ingestion. The Professional exam tests `@dlt.table` vs `dlt.create_streaming_table()`.
+📘 **Context**: The Professional exam heavily tests CDC patterns using `dlt.apply_changes()`. You must understand how SCD Type 1 maintains only current state and how `sequence_by` handles out-of-order events.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Create a DLT Python notebook:
-
-Create new notebook: `pro/week1/notebooks/day4_dlt_pipeline.py`
-
-### Step 2 — Define Bronze streaming table:
+### Step 1 — Create a bronze CDC source table:
 
 ```python
 import dlt
-from pyspark.sql.functions import current_timestamp, input_file_name
+from pyspark.sql.functions import *
 
 @dlt.table(
-    name="orders_bronze",
-    comment="Raw orders data ingested from cloud storage via Auto Loader"
+    name="bronze_customer_cdc",
+    comment="Raw CDC events from upstream database",
+    table_properties={
+        "quality": "bronze"
+    }
 )
-def orders_bronze():
+def bronze_customer_cdc():
     return (
         spark.readStream
             .format("cloudFiles")
             .option("cloudFiles.format", "json")
-            .option("cloudFiles.schemaLocation", "/tmp/schemas/orders")
-            .load("/databricks-datasets/retail-org/customers/")
-            .withColumn("_ingest_timestamp", current_timestamp())
-            .withColumn("_source_file", input_file_name())
-    )
-```
-
-### Step 3 — Verify:
-
-- The table is **streaming** (Auto Loader creates a stream)
-- Metadata columns `_ingest_timestamp` and `_source_file` are added
-- Schema is inferred and stored in `cloudFiles.schemaLocation`
-
-✅ **Expected outcome**: 
-- Bronze table continuously ingests new files from `/databricks-datasets/retail-org/customers/`
-- Each row has ingest timestamp and source file path
-- Schema evolution is handled automatically by Auto Loader
-
-⚠️ **Exam trap**: Forgetting `cloudFiles.schemaLocation` causes schema inference to run on EVERY file. This is expensive! Always set a schema location for production pipelines.
-
----
-
-## Task 2 — Silver Table with Expectations
-
-📖 **Context**: DLT Expectations are THE most tested DLT feature. You must know `expect`, `expect_or_drop`, and `expect_or_fail`.
-
-🛠️ **Instructions**:
-
-### Step 1 — Define Silver table with expectations:
-
-```python
-@dlt.table(
-    name="orders_silver",
-    comment="Cleansed orders with data quality rules applied"
-)
-@dlt.expect_or_drop("valid_order_id", "order_id IS NOT NULL")
-@dlt.expect("positive_amount", "amount > 0")
-def orders_silver():
-    return (
-        dlt.read_stream("orders_bronze")
+            .option("cloudFiles.schemaLocation", "/mnt/cdc/customer_schema")
+            .load("/mnt/cdc/customers/")
             .select(
-                "order_id",
-                "customer_id",
-                col("order_date").cast("date"),
-                col("amount").cast("decimal(10,2)"),
-                "status"
+                col("customer_id").cast("int"),
+                col("name").cast("string"),
+                col("email").cast("string"),
+                col("phone").cast("string"),
+                col("address").cast("string"),
+                col("city").cast("string"),
+                col("state").cast("string"),
+                col("updated_timestamp").cast("timestamp"),
+                col("_change_type").cast("string")  # insert, update, delete
             )
     )
 ```
 
-### Step 2 — Understand expectations:
+### Step 2 — Apply CDC with SCD Type 1 (current state only):
 
-| Expectation | Behavior | Use Case |
-|-------------|----------|----------|
-| `@dlt.expect("name", "condition")` | WARN if violated, row KEPT | Tracking data quality issues |
-| `@dlt.expect_or_drop("name", "condition")` | DROP if violated | Removing invalid rows |
-| `@dlt.expect_or_fail("name", "condition")` | FAIL pipeline if violated | Critical data integrity |
+```python
+# Create the target table first
+dlt.create_streaming_table(
+    name="silver_customers_current",
+    comment="Current customer records (SCD Type 1)",
+    table_properties={
+        "quality": "silver",
+        "delta.enableChangeDataFeed": "true"
+    }
+)
+
+# Apply changes to target table
+dlt.apply_changes(
+    target="silver_customers_current",
+    source="bronze_customer_cdc",
+    keys=["customer_id"],
+    sequence_by=col("updated_timestamp"),
+    except_column_list=["_rescued_data", "_change_type"],
+    stored_as_scd_type="1"
+)
+```
+
+### Step 3 — Verify SCD Type 1 behavior:
+
+```python
+# Query the silver table
+@dlt.table(
+    name="customer_count_verification",
+    comment="Verification query for SCD Type 1"
+)
+def customer_count_verification():
+    return (
+        dlt.read("silver_customers_current")
+            .groupBy("state")
+            .agg(
+                count("customer_id").alias("customer_count"),
+                max("updated_timestamp").alias("latest_update")
+            )
+    )
+```
 
 ✅ **Expected outcome**: 
-- Rows with NULL `order_id` are DROPPED
-- Rows with negative `amount` are KEPT but flagged in metrics
-- Expectation metrics appear in the DLT Event Log
+- Only current (latest) version of each customer is stored
+- Updates overwrite previous records based on `customer_id`
+- `sequence_by` ensures late-arriving events don't overwrite newer data
+- Deletes are handled based on `_change_type` field
 
-⚠️ **Exam trap**: Thinking `expect` drops rows. Wrong! Only `expect_or_drop` and `expect_or_fail` prevent rows from passing through. `expect` only logs violations.
+⚠️ **Exam trap**: 
+- SCD Type 1 does NOT keep history — only current state
+- Without `sequence_by`, late-arriving older updates could overwrite newer data
+- `keys` parameter is REQUIRED — specifies the unique identifier
+- `except_column_list` removes metadata columns from target
 
 ---
 
-## Task 3 — Gold Aggregation Table
+## Task 2 — CDC with APPLY CHANGES INTO (SCD Type 2)
 
-📖 **Context**: Gold tables are materialized views for analytics. The exam tests the difference between streaming and materialized tables.
+📘 **Context**: SCD Type 2 maintains full history with temporal columns. The exam tests your understanding of `__START_AT`, `__END_AT`, and `__CURRENT` columns that DLT automatically creates.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Define Gold aggregation table:
+### Step 1 — Apply CDC with SCD Type 2 (full history):
+
+```python
+# Create target table for historical tracking
+dlt.create_streaming_table(
+    name="silver_customers_history",
+    comment="Complete customer history (SCD Type 2)",
+    table_properties={
+        "quality": "silver",
+        "delta.enableChangeDataFeed": "true"
+    }
+)
+
+# Apply changes with SCD Type 2
+dlt.apply_changes(
+    target="silver_customers_history",
+    source="bronze_customer_cdc",
+    keys=["customer_id"],
+    sequence_by=col("updated_timestamp"),
+    stored_as_scd_type="2",
+    track_history_column_list=["email", "phone", "address", "city", "state"],
+    track_history_except_column_list=[]
+)
+```
+
+### Step 2 — Query historical data with temporal columns:
 
 ```python
 @dlt.table(
-    name="orders_gold_daily",
-    comment="Daily order aggregations by customer segment"
+    name="customer_history_analysis",
+    comment="Analysis of customer changes over time"
 )
-def orders_gold_daily():
+def customer_history_analysis():
     return (
-        dlt.read("orders_silver")
-            .groupBy("order_date", "customer_segment")
-            .agg(
-                count("*").alias("total_orders"),
-                sum("amount").alias("total_revenue"),
-                avg("amount").alias("avg_order_value")
+        dlt.read("silver_customers_history")
+            .filter(col("__CURRENT") == True)
+            .select(
+                col("customer_id"),
+                col("name"),
+                col("email"),
+                col("__START_AT").alias("valid_from"),
+                col("__END_AT").alias("valid_to"),
+                col("__CURRENT").alias("is_current")
             )
     )
 ```
 
-### Step 2 — Understand table types:
-
-| Table Type | Definition | Refresh Behavior |
-|------------|------------|------------------|
-| **Streaming Live Table** | `@dlt.table()` + `readStream` | Continuous processing |
-| **Materialized Live Table** | `@dlt.table()` + `read()` | Full refresh or incremental |
-| **View** | `@dlt.view()` | Not stored, always computed |
-
-✅ **Expected outcome**: 
-- Gold table is MATERIALIZED (not streaming)
-- Full refresh recomputes all aggregations from Silver
-- No `_rescued_data` column (only in streaming tables)
-
-⚠️ **Exam trap**: Thinking Gold tables must be streaming. Wrong! Gold tables are typically materialized views that aggregate cleaned data. Use materialized tables when you need complete aggregations.
-
----
-
-## Task 4 — Pipeline Modes and Development Settings
-
-📖 **Context**: The exam tests when to use Triggered vs Continuous mode, and Development vs Production mode.
-
-🛠️ **Instructions**:
-
-### Step 1 — Create DLT pipeline via UI:
-
-1. Go to **Workflows** > **Delta Live Tables**
-2. Click **Create Pipeline**
-3. Set these configs:
-   - **Name**: `orders_dlt_pipeline`
-   - **Notebook**: Select your Day 4 notebook
-   - **Mode**: Development
-   - **Trigger**: Triggered
-   - **Storage Location**: `/tmp/dlt/orders_pipeline`
-   - **Catalog**: `training_uc`
-   - **Target Schema**: `bronze`
-
-### Step 2 — Understand pipeline modes:
-
-| Mode | Use Case | Key Differences |
-|------|----------|----------------|
-| **Development** | Testing, debugging | Tables prefixed with username, enhanced logging, auto-retry disabled |
-| **Production** | Live pipelines | No username prefix, strict error handling, full lineage tracking |
-
-| Trigger Type | Use Case | Key Differences |
-|--------------|----------|----------------|
-| **Triggered** | Batch processing | Runs once, processes all available data, stops |
-| **Continuous** | Real-time streaming | Runs continuously, processes new data as it arrives |
-
-### Step 3 — Run the pipeline:
-
-1. Click **Start** to run the pipeline
-2. Observe the lineage graph (Bronze → Silver → Gold)
-3. Check the **Event Log** for expectation metrics
-
-✅ **Expected outcome**: 
-- Pipeline creates 3 tables: `orders_bronze`, `orders_silver`, `orders_gold_daily`
-- In Development mode, tables are prefixed with your username
-- Event Log shows expectation violations and processing metrics
-
-⚠️ **Exam trap**: Thinking Development mode tables are permanent. Wrong! Dev tables are temporary and may be dropped when switching to Production. Always use Production mode for live pipelines.
-
----
-
-## Task 5 — DLT Expectations Analysis
-
-📖 **Context**: The exam gives you a table with multiple expectations and asks you to predict which rows are kept/dropped/fail.
-
-🛠️ **Instructions**:
-
-Given a DLT table with these constraints:
+### Step 3 — Analyze change frequency:
 
 ```python
-@dlt.table()
-@dlt.expect_or_drop("valid_order", "order_id IS NOT NULL")
-@dlt.expect("positive_amount", "amount > 0")
-@dlt.expect_or_fail("valid_status", "status IN ('placed','shipped','delivered','cancelled')")
-def orders_silver():
-    return dlt.read_stream("orders_bronze")
+@dlt.table(
+    name="customer_change_frequency",
+    comment="How often customers update their information"
+)
+def customer_change_frequency():
+    return (
+        dlt.read("silver_customers_history")
+            .groupBy("customer_id")
+            .agg(
+                count("*").alias("total_versions"),
+                min("__START_AT").alias("first_seen"),
+                max("__START_AT").alias("last_updated"),
+                sum(when(col("__CURRENT") == True, 1).otherwise(0)).alias("current_count")
+            )
+            .filter(col("total_versions") > 1)
+    )
 ```
 
-### Analyze these rows:
-
-| order_id | amount | status | Result |
-|----------|--------|--------|--------|
-| ORD001 | 50.0 | placed | ✅ KEPT |
-| NULL | 50.0 | placed | ❌ DROPPED (fails `valid_order`) |
-| ORD003 | -10.0 | shipped | ✅ KEPT (negative amount only WARNS) |
-| ORD004 | 20.0 | refunded | 💥 PIPELINE FAILS (fails `valid_status`) |
-
 ✅ **Expected outcome**: 
-- Row 1: All expectations pass → KEPT
-- Row 2: `expect_or_drop` fails → DROPPED
-- Row 3: Only `expect` fails → KEPT (with warning)
-- Row 4: `expect_or_fail` fails → PIPELINE FAILS
+- Each change creates a new row with temporal tracking
+- `__START_AT`: When this version became active
+- `__END_AT`: When this version was superseded (NULL for current)
+- `__CURRENT`: Boolean flag for latest version
+- Full audit trail of all changes
 
-⚠️ **Exam trap**: Thinking `expect` drops rows. Wrong! Only `expect_or_drop` and `expect_or_fail` affect data flow. `expect` only logs violations.
+⚠️ **Exam trap**: 
+- SCD Type 2 creates MULTIPLE rows per customer (one per change)
+- `__CURRENT = True` identifies the latest version
+- `track_history_column_list` specifies which columns trigger new versions
+- `track_history_except_column_list` excludes columns from versioning
+- Temporal columns are added AUTOMATICALLY by DLT
 
 ---
 
-## Task 6 — Streaming vs Materialized Tables
+## Task 3 — CDC with Delete Operations
 
-📖 **Context**: The exam tests whether you understand when to use streaming vs materialized tables.
+📘 **Context**: Handling deletes in CDC is tricky. The exam tests whether you understand how `apply_changes()` processes delete events differently in Type 1 vs Type 2.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Decision Matrix:
-
-| Scenario | Table Type | Reason |
-|----------|------------|--------|
-| Ingest raw data from cloud storage | Streaming | Auto Loader requires streaming |
-| Apply row-level transformations | Streaming | Process records as they arrive |
-| Aggregate metrics for BI dashboard | Materialized | Need complete view of all data |
-| Join streaming data with dimension table | Streaming | Use `stream-static` join |
-| Create a view for SQL queries | Materialized or View | Views are not stored |
-
-### Key differences:
+### Step 1 — Configure CDC source with delete handling:
 
 ```python
-# Streaming table
-@dlt.table()
-def my_stream():
-    return spark.readStream.table("source")  # Note: readStream
+@dlt.table(
+    name="bronze_product_cdc",
+    comment="Product CDC with INSERT, UPDATE, DELETE events"
+)
+def bronze_product_cdc():
+    return (
+        spark.readStream
+            .format("cloudFiles")
+            .option("cloudFiles.format", "json")
+            .option("cloudFiles.schemaLocation", "/mnt/cdc/product_schema")
+            .load("/mnt/cdc/products/")
+            .select(
+                col("product_id").cast("int"),
+                col("product_name").cast("string"),
+                col("category").cast("string"),
+                col("price").cast("decimal(10,2)"),
+                col("updated_timestamp").cast("timestamp"),
+                col("_change_type").cast("string")  # insert, update, delete
+            )
+    )
+```
 
-# Materialized table
-@dlt.table()
-def my_table():
-    return spark.read.table("source")  # Note: read (not readStream)
+### Step 2 — Apply changes with delete handling (SCD Type 1):
 
-# View (not stored)
-@dlt.view()
-def my_view():
-    return spark.read.table("source")
+```python
+dlt.create_streaming_table("silver_products_current")
+
+dlt.apply_changes(
+    target="silver_products_current",
+    source="bronze_product_cdc",
+    keys=["product_id"],
+    sequence_by=col("updated_timestamp"),
+    apply_as_deletes=expr("_change_type = 'delete'"),
+    except_column_list=["_change_type"],
+    stored_as_scd_type="1"
+)
+```
+
+### Step 3 — Apply changes with delete handling (SCD Type 2):
+
+```python
+dlt.create_streaming_table("silver_products_history")
+
+dlt.apply_changes(
+    target="silver_products_history",
+    source="bronze_product_cdc",
+    keys=["product_id"],
+    sequence_by=col("updated_timestamp"),
+    apply_as_deletes=expr("_change_type = 'delete'"),
+    except_column_list=["_change_type"],
+    stored_as_scd_type="2"
+)
+```
+
+### Step 4 — Query deleted products:
+
+```python
+@dlt.table(
+    name="deleted_products_audit",
+    comment="Audit trail of deleted products"
+)
+def deleted_products_audit():
+    return (
+        dlt.read("silver_products_history")
+            .filter(col("__END_AT").isNotNull() & (col("__CURRENT") == False))
+            .select(
+                col("product_id"),
+                col("product_name"),
+                col("category"),
+                col("__START_AT").alias("active_from"),
+                col("__END_AT").alias("deleted_at")
+            )
+    )
 ```
 
 ✅ **Expected outcome**: 
-- Streaming tables for ingestion and row-level transformations
-- Materialized tables for aggregations and analytics
-- Views for intermediate transformations that don't need storage
+- Type 1 deletes: Row is physically removed from table
+- Type 2 deletes: `__END_AT` is set, `__CURRENT = False`
+- Deleted records remain in Type 2 for audit purposes
+- `apply_as_deletes` condition determines which rows are deletes
 
-⚠️ **Exam trap**: Using `dlt.read_stream()` on a materialized table. Wrong! Materialized tables use `dlt.read()` (non-streaming). Only Bronze and Silver tables are typically streaming.
+⚠️ **Exam trap**: 
+- SCD Type 1: Deletes REMOVE rows (no history)
+- SCD Type 2: Deletes PRESERVE rows with `__CURRENT = False`
+- `apply_as_deletes` must be an expression, not a column name
+- Without `apply_as_deletes`, delete events are treated as updates
+- For audit compliance, always use SCD Type 2!
 
 ---
 
-## Task 7 — DLT Event Log Analysis
+## Task 4 — Advanced CDC: Multiple Keys and Ignore Null Updates
 
-📖 **Context**: The exam tests your ability to query the DLT Event Log for metrics and debugging.
+📘 **Context**: Real-world CDC often involves composite keys and handling NULL values. The exam may test edge cases like multi-column keys and `ignore_null_updates`.
 
-🛠️ **Instructions**:
+🔧 **Instructions**:
 
-### Step 1 — Query event log:
+### Step 1 — CDC with composite keys:
 
-```sql
-SELECT 
-  timestamp,
-  details:flow_definition.output_dataset as dataset,
-  details:flow_definition.schema as schema,
-  details:flow_progress.metrics.num_output_rows as rows_processed,
-  details:flow_progress.data_quality.expectations as quality_metrics
-FROM event_log("training_uc.bronze.orders_dlt_pipeline_events")
-WHERE event_type = 'flow_progress'
-ORDER BY timestamp DESC
-LIMIT 10;
+```python
+@dlt.table(
+    name="bronze_order_line_cdc",
+    comment="Order line items with composite key"
+)
+def bronze_order_line_cdc():
+    return (
+        spark.readStream
+            .format("cloudFiles")
+            .option("cloudFiles.format", "json")
+            .option("cloudFiles.schemaLocation", "/mnt/cdc/order_line_schema")
+            .load("/mnt/cdc/order_lines/")
+            .select(
+                col("order_id").cast("int"),
+                col("line_number").cast("int"),
+                col("product_id").cast("int"),
+                col("quantity").cast("int"),
+                col("unit_price").cast("decimal(10,2)"),
+                col("discount").cast("decimal(5,2)"),
+                col("updated_timestamp").cast("timestamp")
+            )
+    )
 ```
 
-### Step 2 — Find expectation violations:
+### Step 2 — Apply changes with composite key:
 
-```sql
-SELECT 
-  timestamp,
-  details:flow_definition.output_dataset as dataset,
-  details:flow_progress.data_quality.dropped_records as dropped_records,
-  details:flow_progress.data_quality.expectations
-FROM event_log("training_uc.bronze.orders_dlt_pipeline_events")
-WHERE details:flow_progress.data_quality.dropped_records > 0
-ORDER BY timestamp DESC;
+```python
+dlt.create_streaming_table("silver_order_lines")
+
+dlt.apply_changes(
+    target="silver_order_lines",
+    source="bronze_order_line_cdc",
+    keys=["order_id", "line_number"],  # Composite key
+    sequence_by=col("updated_timestamp"),
+    ignore_null_updates=True,
+    stored_as_scd_type="1"
+)
+```
+
+### Step 3 — Test null handling:
+
+```python
+# Example: If CDC sends an update with NULL discount,
+# ignore_null_updates=True will keep the existing discount value
+
+@dlt.table(
+    name="order_line_validation",
+    comment="Validate no NULL values in critical fields"
+)
+def order_line_validation():
+    return (
+        dlt.read("silver_order_lines")
+            .select(
+                col("order_id"),
+                col("line_number"),
+                col("product_id"),
+                col("quantity"),
+                when(col("discount").isNull(), lit("NULL_DISCOUNT"))
+                    .otherwise(col("discount").cast("string"))
+                    .alias("discount_status")
+            )
+    )
 ```
 
 ✅ **Expected outcome**: 
-- Event log shows all pipeline runs with detailed metrics
-- Expectation violations are tracked per expectation name
-- Dropped records are counted and logged
+- Composite keys work with list: `keys=["col1", "col2"]`
+- `ignore_null_updates=True` prevents NULLs from overwriting existing values
+- Useful when CDC system sends partial updates
+- NULL in key columns is never allowed
 
-⚠️ **Exam trap**: Thinking event log is in `information_schema`. Wrong! Event log has its own path: `event_log("<pipeline-storage-path>/system/events")`.
-
----
-
-## Task 8 — Concept Quiz
-
-Answer these rapid-fire questions:
-
-1. What is the difference between `@dlt.table()` and `@dlt.view()`?
-2. What does `expect_or_drop` do?
-3. What does `expect_or_fail` do?
-4. When should you use **Triggered** mode vs **Continuous** mode?
-5. What is the difference between Development and Production mode?
-6. Can a DLT pipeline contain both streaming and materialized tables?
-7. Where is the DLT Event Log stored?
-8. What is `cloudFiles.schemaLocation` used for?
-9. What happens if a row fails an `expect` constraint?
-10. Can you use `dlt.read_stream()` on a materialized table?
+⚠️ **Exam trap**: 
+- `keys` can have multiple columns for composite keys
+- NULL in key columns causes pipeline failure
+- `ignore_null_updates` applies to ALL columns, not selective
+- Without `ignore_null_updates`, NULLs overwrite existing values
+- Default behavior: `ignore_null_updates=False`
 
 ---
 
-## Key Takeaways for the Exam
+## Concept Quiz
 
-✅ **DLT Table Types:**
-- **Streaming Live Table**: `@dlt.table()` + `readStream` → continuous processing
-- **Materialized Live Table**: `@dlt.table()` + `read()` → batch processing
-- **View**: `@dlt.view()` → not stored, always computed
+1. What is the key difference between SCD Type 1 and Type 2 in DLT?
+   - A) Type 1 is faster
+   - B) Type 1 keeps current state only, Type 2 keeps full history ✓
+   - C) Type 1 uses MERGE, Type 2 uses INSERT
+   - D) Type 1 cannot handle deletes
 
-✅ **Expectations:**
-- `@dlt.expect("name", "condition")`: WARN if violated, row KEPT
-- `@dlt.expect_or_drop("name", "condition")`: DROP if violated
-- `@dlt.expect_or_fail("name", "condition")`: FAIL pipeline if violated
-- Expectations are tracked in the Event Log
+2. What does `sequence_by` do in `apply_changes()`?
+   - A) Orders the output table
+   - B) Prevents out-of-order events from overwriting newer data ✓
+   - C) Creates a sequence number column
+   - D) Partitions the target table
 
-✅ **Pipeline Modes:**
-- **Development**: Testing, username-prefixed tables, enhanced logging
-- **Production**: Live pipelines, strict error handling, full lineage
-- **Triggered**: Runs once, processes all data, stops
-- **Continuous**: Runs indefinitely, processes new data as it arrives
+3. In SCD Type 2, what does `__CURRENT = True` indicate?
+   - A) The row is being updated
+   - B) The row is the latest version of the record ✓
+   - C) The row has been validated
+   - D) The row is a current year record
 
-✅ **Auto Loader:**
-- Use `cloudFiles` format for incremental ingestion
-- Always set `cloudFiles.schemaLocation` for schema evolution
-- Supports JSON, CSV, Parquet, Avro, and more
+4. How are deletes handled in SCD Type 1 vs Type 2?
+   - A) Same in both types
+   - B) Type 1 removes rows, Type 2 sets __END_AT and __CURRENT=False ✓
+   - C) Type 2 removes rows, Type 1 keeps them
+   - D) Neither type supports deletes
 
-✅ **Event Log:**
-- Query using `event_log("<pipeline-path>/system/events")`
-- Shows metrics, expectation violations, and debugging info
-- Use for monitoring and troubleshooting pipelines
+5. What happens if `sequence_by` column has NULL values?
+   - A) Row is ignored
+   - B) Pipeline fails ✓
+   - C) NULL is treated as oldest timestamp
+   - D) NULL is treated as current timestamp
 
 ---
 
-## Next Steps
+## Key Takeaways
 
-You've completed Day 4! You now understand Delta Live Tables at a professional level. Tomorrow (Day 5), you'll learn Workflows and Job Orchestration.
+✅ **For the exam, remember:**
+
+1. **SCD Type 1 vs Type 2**:
+   - Type 1 = Current state only (updates overwrite)
+   - Type 2 = Full history with temporal columns
+   - Choose based on audit requirements
+
+2. **sequence_by is Critical**:
+   - Required to handle out-of-order events
+   - Must be a timestamp or monotonically increasing column
+   - NULL values cause pipeline failure
+   - Without it, late updates can corrupt data
+
+3. **SCD Type 2 Temporal Columns**:
+   - `__START_AT`: When version became active
+   - `__END_AT`: When version was superseded (NULL = current)
+   - `__CURRENT`: Boolean for latest version
+   - Created AUTOMATICALLY by DLT
+
+4. **Delete Handling**:
+   - `apply_as_deletes`: Expression to identify delete events
+   - Type 1: Physical deletion
+   - Type 2: Logical deletion (__CURRENT = False)
+   - Always use Type 2 for compliance/audit
+
+5. **Advanced Features**:
+   - Composite keys: `keys=["col1", "col2"]`
+   - `ignore_null_updates`: Prevents NULLs from overwriting
+   - `except_column_list`: Removes metadata columns
+   - `track_history_column_list`: Specifies version-triggering columns (Type 2)
+
+---
+
+**Next Steps**: Review `study-notes.md` focusing on CDC patterns and APPLY CHANGES INTO syntax. Practice with both SCD types and understand when to use each.
