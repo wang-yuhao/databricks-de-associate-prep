@@ -31,9 +31,7 @@ You CANNOT run DLT code on regular Databricks clusters! DLT code must run within
 - Copy the DLT code from tasks below into this notebook
 
 **Step 2: Create a DLT Pipeline**
-1. Go to **Workflows** → **Delta Live Tables** → **Create Pipeline**
-2. Configure the pipeline:
-   - **Pipeline name**: `day3_practice_pipeline`
+1. **In Azure Databricks (July 2026+):** Go to **Workflows** → **Pipelines** → Click **Create pipeline** button   - **Pipeline name**: `day3_practice_pipeline`
    - **Notebook**: Select your `day3_dlt_pipeline` notebook  
    - **Storage location**: `/mnt/dlt/day3_practice`
    - **Target schema**: `your_catalog.your_schema` (Unity Catalog)
@@ -48,7 +46,8 @@ You CANNOT run DLT code on regular Databricks clusters! DLT code must run within
 **Alternative: Study for Exam Without Running**
 - Focus on understanding `@dlt.table`, `@dlt.expect*` decorators
 - Learn SCD Type 1 vs Type 2 differences  
-- Memorize DLT-specific syntax
+- Memorize DLT-specific synt
+   - **Note:** DLT is now called "Lakeflow Spark Declarative Pipelines" but `import dlt` still works
 - Review exam traps and key takeaways
 
 | Regular Notebook | DLT Pipeline |
