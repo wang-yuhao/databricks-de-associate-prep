@@ -18,41 +18,58 @@ Work through each task **in order** — each one builds on the last. Every task 
 
 ---
 
-## ⚠️ IMPORTANT: DLT Pipeline Setup Required
+## ⚠️ IMPORTANT: DLT Pipeline Setup Required (July 2026 UI)
 
 **ERROR FIX: `ModuleNotFoundError: No module named 'dlt'`**
 
-You CANNOT run DLT code on regular Databricks clusters! DLT code must run within a **Delta Live Tables pipeline**.
+You CANNOT run DLT code on regular Databricks clusters! DLT code must run within a **Lakeflow Spark Declarative Pipeline** (formerly Delta Live Tables).
 
-### How to Run These Tasks:
+> 💡 `import dlt` still works in July 2026 — the Python module name has not changed even though the product is now called "Lakeflow Spark Declarative Pipelines".
 
-**Step 1: Create a DLT Notebook**
-- In Databricks workspace, create a new notebook named `day3_dlt_pipeline`
-- Copy the DLT code from tasks below into this notebook
+### How to Run These Tasks (July 2026 UI):
 
-**Step 2: Create a DLT Pipeline**
-1. **In Azure Databricks (July 2026+):** Go to **Workflows** → **Pipelines** → Click **Create pipeline** button   - **Pipeline name**: `day3_practice_pipeline`
-   - **Notebook**: Select your `day3_dlt_pipeline` notebook  
-   - **Storage location**: `/mnt/dlt/day3_practice`
-   - **Target schema**: `your_catalog.your_schema` (Unity Catalog)
+**Step 1: Create a New ETL Pipeline**
+
+1. In the Azure Databricks left sidebar, click the **➕ New** button at the top
+2. Select **ETL pipeline** from the dropdown
+3. A new pipeline opens in the **Lakeflow Pipelines Editor** — a full IDE with asset browser, code editor, and graph panel
+
+> 🔁 **Alternative path**: Click **Jobs & Pipelines** in the left sidebar → click **New** → select **ETL Pipeline**
+
+> ⚠️ **July 2026 note**: There is no separate "Workflows" item in the sidebar. Pipelines are now managed under **Jobs & Pipelines** or created directly via **New → ETL Pipeline**.
+
+**Step 2: Name and Configure Your Pipeline**
+
+1. At the top of the editor, rename the pipeline to: `day3_practice_pipeline`
+2. Click the **catalog/schema** shown next to the name to set your Unity Catalog target (e.g. `your_catalog.your_schema`)
+3. Click **Settings** (gear icon) to verify:
+   - **Compute**: Serverless (default) or Fixed Size 1 worker
+   - **Channel**: Current
    - **Pipeline mode**: Development
-   - **Cluster**: Fixed size, 1 worker
 
-**Step 3: Run the Pipeline**
-- Click **Start** to execute
-- Monitor in the pipeline UI
-- Check event log for data quality metrics
+**Step 3: Create Source Code Files**
+
+1. In the **Pipeline asset browser** (left panel), click **➕** next to the `transformations/` folder
+2. Click **Transformation**
+3. Name it `day3_dlt_pipeline`, choose **Python**
+4. Click **Create**
+
+> 💡 Use the `explorations/` folder for setup notebooks and test queries — code there runs on regular clusters, not inside the pipeline.
+
+**Step 4: Run the Pipeline**
+- Click **Run pipeline** in the toolbar to execute
+- Monitor execution in the **Pipeline graph** (bottom panel)
+- Check the **Event log** tab in the bottom panel for data quality metrics
+- Use **Run file** to refresh only a single source file during development
 
 **Alternative: Study for Exam Without Running**
 - Focus on understanding `@dlt.table`, `@dlt.expect*` decorators
-- Learn SCD Type 1 vs Type 2 differences  
-- Memorize DLT-specific synt
-   - **Note:** DLT is now called "Lakeflow Spark Declarative Pipelines" but `import dlt` still works
-- Review exam traps and key takeaways
+- Learn SCD Type 1 vs Type 2 differences
+- Memorize DLT-specific syntax
 
-| Regular Notebook | DLT Pipeline |
-|-----------------|-------------|
-| Runs on cluster | Runs in DLT Pipeline |
+| Regular Notebook | Lakeflow Pipeline |
+|-----------------|------------------|
+| Runs on cluster | Runs in Lakeflow Pipeline |
 | Manual CREATE TABLE | `@dlt.table` decorator |
 | Manual ordering | Auto dependency resolution |
 | Manual validation | Built-in expectations |
@@ -64,7 +81,9 @@ You CANNOT run DLT code on regular Databricks clusters! DLT code must run within
 
 🔧 **Instructions**:
 
-### Step 1 — Create a DLT notebook with streaming table:
+Paste the following code **in order** into your `day3_dlt_pipeline.py` file in the `transformations/` folder:
+
+### Step 1 — Create a bronze streaming table:
 
 ```python
 import dlt
@@ -130,6 +149,12 @@ def gold_daily_revenue():
     )
 ```
 
+### Step 4 — Run the Pipeline
+
+1. Click **Run pipeline** in the toolbar
+2. The **Pipeline graph** (bottom panel) shows your 3-node DAG: `bronze_orders → silver_orders → gold_daily_revenue`
+3. Watch the **Tables** tab for execution insights
+
 ✅ **Expected outcome**: 
 - Pipeline creates three tables: bronze_orders (streaming), silver_orders (with quality checks), gold_daily_revenue (aggregated)
 - Rows failing `expect_or_fail` will halt the pipeline
@@ -137,25 +162,80 @@ def gold_daily_revenue():
 - Rows failing `expect` will be recorded but still processed
 
 ⚠️ **Exam trap**: 
-- `@dlt.expect()` logs violations but doesn't drop rows
-- `@dlt.expect_or_drop()` drops invalid rows
-- `@dlt.expect_or_fail()` stops the pipeline on violations
-- Many candidates confuse these three behaviors!
+
+| Decorator | Behavior |
+|:--|:--|
+| `@dlt.expect()` | Logs violations, **keeps** rows |
+| `@dlt.expect_or_drop()` | **Drops** invalid rows |
+| `@dlt.expect_or_fail()` | **Stops** the whole pipeline |
+
+Many candidates confuse these three behaviors!
 
 ---
 
-## Task 2 — Change Data Capture (CDC) with APPLY CHANGES INTO
+## Task 2 — Change Data Capture (CDC) with `dlt.apply_changes()`
 
-📘 **Context**: DLT provides `dlt.apply_changes()` for handling CDC from sources like Debezium or Delta CDF. The exam tests your understanding of SCD Type 1 vs Type 2.
+📘 **Context**: The exam tests your understanding of CDC, SCD Type 1 vs Type 2, and how Lakeflow pipelines process ordered changes. `dlt.apply_changes()` is still valid in July 2026 and is the primary CDC API tested in the exam.
 
 🔧 **Instructions**:
+
+### Part 1 — Create Mock CDC Source Data (in `explorations/`)
+
+Since no live CDC source is available, create mock data using a setup notebook. In the **Lakeflow Pipelines Editor**, click **➕** next to `explorations/` → **Notebook** → name it `setup_cdc_data` → **Python**.
+
+**Cell 1 — Create schema and source table:**
+
+```python
+spark.sql("CREATE SCHEMA IF NOT EXISTS main.cdc_tutorial")
+
+spark.sql("""
+CREATE TABLE IF NOT EXISTS main.cdc_tutorial.customers_cdc (
+    customer_id   INT,
+    email         STRING,
+    phone         STRING,
+    address       STRING,
+    last_login    TIMESTAMP,
+    operation     STRING,
+    updated_timestamp BIGINT
+)
+TBLPROPERTIES (delta.enableChangeDataFeed = true)
+""")
+```
+
+**Cell 2 — Insert INSERTs, UPDATEs, and a DELETE:**
+
+```python
+spark.sql("""
+INSERT INTO main.cdc_tutorial.customers_cdc VALUES
+(1, 'alice@example.com',   '+49-89-1234', 'Munich, DE',    current_timestamp(), 'INSERT', 1),
+(2, 'bob@example.com',     '+49-89-5678', 'Berlin, DE',    current_timestamp(), 'INSERT', 2),
+(3, 'charlie@example.com', '+49-89-9999', 'Hamburg, DE',   current_timestamp(), 'INSERT', 3),
+(4, 'diana@example.com',   '+49-89-1111', 'Frankfurt, DE', current_timestamp(), 'INSERT', 4),
+(1, 'alice_new@example.com', '+49-89-1234', 'Munich, DE',  current_timestamp(), 'UPDATE', 10),
+(2, 'bob@example.com',       '+49-89-5678', 'Cologne, DE', current_timestamp(), 'UPDATE', 11),
+(3, NULL, NULL, NULL, NULL, 'DELETE', 12)
+""")
+```
+
+**Cell 3 — Verify 7 rows exist:**
+
+```python
+display(spark.sql("SELECT * FROM main.cdc_tutorial.customers_cdc ORDER BY customer_id, updated_timestamp"))
+```
+
+### Part 2 — Write CDC Pipeline in `transformations/`
+
+Create a transformation file named `day3_cdc_pipeline.py`:
 
 ### Step 1 — Create bronze CDC stream:
 
 ```python
+import dlt
+from pyspark.sql.functions import col
+
 @dlt.table(
     name="bronze_customer_cdc",
-    comment="Raw CDC events from source system"
+    comment="Raw CDC events from mock customers source"
 )
 def bronze_customer_cdc():
     return (
@@ -163,7 +243,7 @@ def bronze_customer_cdc():
             .format("delta")
             .option("readChangeFeed", "true")
             .option("startingVersion", "0")
-            .table("source_catalog.source_schema.customers_cdc")
+            .table("main.cdc_tutorial.customers_cdc")
     )
 ```
 
@@ -177,10 +257,13 @@ dlt.apply_changes(
     source="bronze_customer_cdc",
     keys=["customer_id"],
     sequence_by=col("updated_timestamp"),
-    except_column_list=["_rescued_data"],
+    apply_as_deletes="operation = 'DELETE'",
+    except_column_list=["operation", "updated_timestamp"],
     stored_as_scd_type="1"
 )
 ```
+
+> ⚠️ Do NOT include `_rescued_data` in `except_column_list` here — that column only exists for Auto Loader (`cloudFiles`) sources, not Delta CDF sources.
 
 ### Step 3 — Apply changes with SCD Type 2:
 
@@ -192,22 +275,66 @@ dlt.apply_changes(
     source="bronze_customer_cdc",
     keys=["customer_id"],
     sequence_by=col("updated_timestamp"),
+    apply_as_deletes="operation = 'DELETE'",
     stored_as_scd_type="2",
-    track_history_column_list=["email", "phone", "address"],
-    track_history_except_column_list=["last_login"]
+    track_history_except_column_list=["last_login", "operation", "updated_timestamp"]
 )
 ```
 
+> ⚠️ **Critical**: Use EITHER `track_history_column_list` OR `track_history_except_column_list` — **never both**. Defining both at the same time causes `_LEGACY_ERROR_TEMP_66_INVALID_TRACK_HISTORY_COLS`.
+
+### Part 3 — Run and Verify
+
+Run the pipeline, then verify in a new `explorations/` notebook named `verify_cdc`:
+
+**Check SCD Type 1** (should show 3 rows — charlie deleted, alice/bob updated):
+
+```python
+display(spark.sql("SELECT * FROM main.cdc_tutorial.silver_customers_scd1 ORDER BY customer_id"))
+```
+
+**Check SCD Type 2** (full history with `__START_AT`, `__END_AT`):
+
+```python
+display(spark.sql("""
+SELECT
+    customer_id,
+    email,
+    address,
+    __START_AT,
+    __END_AT,
+    CASE WHEN __END_AT IS NULL THEN true ELSE false END AS is_current
+FROM main.cdc_tutorial.silver_customers_scd2
+ORDER BY customer_id, __START_AT
+"""))
+```
+
+**Simulate a new CDC wave (optional)**:
+
+```python
+spark.sql("""
+INSERT INTO main.cdc_tutorial.customers_cdc VALUES
+(4, 'diana_new@example.com', '+49-89-2222', 'Stuttgart, DE', current_timestamp(), 'UPDATE', 20),
+(5, 'eve@example.com', '+49-89-3333', 'Dresden, DE', current_timestamp(), 'INSERT', 21)
+""")
+```
+
+Re-run the pipeline and check that diana now has two rows in SCD Type 2.
+
 ✅ **Expected outcome**: 
-- SCD Type 1: Only current records, updates overwrite
-- SCD Type 2: Historical records preserved with __START_AT, __END_AT, __CURRENT columns
-- `sequence_by` ensures correct ordering of CDC events
+
+| | SCD Type 1 | SCD Type 2 |
+|:--|:--|:--|
+| alice after update | only `alice_new@example.com` | both old + new email rows |
+| charlie after delete | **row gone** | row with `__END_AT` populated |
+| Extra columns | none | `__START_AT`, `__END_AT` |
+| Current row identification | only row present | `__END_AT IS NULL` |
 
 ⚠️ **Exam trap**: 
-- SCD Type 1 = current state only (no history)
-- SCD Type 2 = full history with temporal columns
-- `sequence_by` is REQUIRED to handle out-of-order events
-- Without `sequence_by`, late-arriving updates may be ignored!
+- Do **not** define both `track_history_column_list` and `track_history_except_column_list` at the same time
+- Do **not** reference `_rescued_data` in `except_column_list` unless your source uses Auto Loader (`cloudFiles`)
+- SCD Type 2 does **not** generate a `__CURRENT` column — use `__END_AT IS NULL` to identify current rows
+- `sequence_by` is **required** to handle out-of-order CDC events; without it, late-arriving updates may corrupt your target table
 
 ---
 
@@ -217,10 +344,41 @@ dlt.apply_changes(
 
 🔧 **Instructions**:
 
-### Step 1 — Create DLT pipeline via Databricks UI or CLI:
+### Step 1 — Open Pipeline Settings
+
+In the Lakeflow Pipelines Editor, click the **Settings** (gear icon) in the asset browser panel.
+
+You do **not** need to write JSON config manually — the editor provides a UI for all settings.
+
+### Step 2 — Understand refresh modes:
 
 ```python
-# Pipeline configuration (as JSON for CLI deployment)
+# Full Refresh: Drop and recreate all tables (expensive)
+# Triggered: Run once on demand or on schedule (batch, cost-effective)
+# Continuous: Keep pipeline running, process new data as it arrives (real-time, higher cost)
+```
+
+For this exercise, keep it as **Triggered** (Development mode).
+
+### Step 3 — Verify Unity Catalog target:
+
+1. In **Settings**, confirm **Target catalog** and **Target schema** are set (e.g. `main_catalog.analytics_schema`)
+2. After a successful run, go to **Catalog Explorer** → browse to your catalog/schema
+3. Tables will be registered as:
+   - `main_catalog.analytics_schema.bronze_orders`
+   - `main_catalog.analytics_schema.silver_orders`
+   - `main_catalog.analytics_schema.gold_daily_revenue`
+
+### Step 4 — Publish Event Log to Unity Catalog:
+
+1. In **Settings → Advanced settings** → click **Edit advanced settings**
+2. Under **Event logs**, click **Publish to catalog**
+3. Provide a catalog, schema, and table name
+4. Click **Save**
+
+Reference pipeline configuration (for CLI/API deployment):
+
+```json
 {
     "name": "orders_dlt_pipeline",
     "storage": "/mnt/dlt/orders_pipeline",
@@ -239,7 +397,6 @@ dlt.apply_changes(
         {
             "label": "default",
             "num_workers": 2,
-            "node_type_id": "i3.xlarge",
             "autoscale": {
                 "min_workers": 1,
                 "max_workers": 5
@@ -251,37 +408,6 @@ dlt.apply_changes(
     "photon": true,
     "channel": "CURRENT"
 }
-```
-
-### Step 2 — Understand refresh modes:
-
-```python
-# Full Refresh: Drop and recreate all tables
-# Triggered: Run once on demand or on schedule
-# Continuous: Keep pipeline running, process new data as it arrives
-
-# For exam:
-# - Full refresh = expensive, recreates everything
-# - Triggered = batch processing, cost-effective
-# - Continuous = real-time streaming, higher cost
-```
-
-### Step 3 — Deploy with Unity Catalog:
-
-```python
-# Specify Unity Catalog target in pipeline config
-"target": "main_catalog.analytics_schema"
-
-# All DLT tables will be created as:
-# main_catalog.analytics_schema.bronze_orders
-# main_catalog.analytics_schema.silver_orders
-# main_catalog.analytics_schema.gold_daily_revenue
-
-# Unity Catalog provides:
-# - Fine-grained access control
-# - Data lineage tracking
-# - Audit logging
-# - Cross-workspace data sharing
 ```
 
 ✅ **Expected outcome**: 
@@ -303,12 +429,18 @@ dlt.apply_changes(
 
 🔧 **Instructions**:
 
-### Step 1 — Query the DLT event log:
+### Step 1 — View the Event Log in the UI (July 2026)
+
+In July 2026, the event log is accessible **directly in the Lakeflow Pipelines Editor**:
+
+1. After running the pipeline, click the **Event log** tab in the **bottom panel** of the editor
+2. All flow progress events, errors, and data quality metrics are visible inline
+
+### Step 2 — Query the event log via SQL:
+
+Open the **SQL Editor** (switch context in the top of the left sidebar), then run:
 
 ```sql
--- Event log is stored at: <storage_location>/system/events
--- Query using SQL:
-
 SELECT 
     timestamp,
     details:flow_definition.output_dataset as dataset,
@@ -325,10 +457,9 @@ ORDER BY
     timestamp DESC;
 ```
 
-### Step 2 — Monitor data quality metrics:
+### Step 3 — Monitor data quality metrics:
 
 ```sql
--- Check expectation violations:
 SELECT 
     timestamp,
     details:flow_definition.output_dataset as table_name,
@@ -355,6 +486,19 @@ ORDER BY
 - Use `delta.\`path\`` syntax to query by path
 - Event log structure uses nested JSON in `details` column
 - Must use `explode()` to access array elements!
+
+---
+
+## July 2026 UI Navigation Quick Reference
+
+| Old path (pre-2026) | New path (July 2026) |
+|:--|:--|
+| Workflows → Pipelines | **Jobs & Pipelines** in left sidebar |
+| Create Pipeline (legacy form) | **➕ New → ETL Pipeline** opens Lakeflow Pipelines Editor |
+| DLT Notebook | Source file in `transformations/` folder |
+| Setup/seed scripts | Notebook in `explorations/` folder |
+| Pipeline monitoring tab | **Event log** tab in Lakeflow Pipelines Editor bottom panel |
+| Separate pipeline config JSON | **Settings** panel inside the Editor |
 
 ---
 
@@ -390,6 +534,18 @@ ORDER BY
    - C) Pipeline uses continuous optimization
    - D) Pipeline never stops even on errors
 
+6. You define both `track_history_column_list` and `track_history_except_column_list` in `apply_changes()`. What happens?
+   - A) Only `track_history_column_list` takes effect
+   - B) Only `track_history_except_column_list` takes effect
+   - C) Databricks throws `_LEGACY_ERROR_TEMP_66_INVALID_TRACK_HISTORY_COLS` ✓
+   - D) Both are merged into a single allow-list
+
+7. For SCD Type 2, how do you identify the current (latest) version of a record?
+   - A) Filter on `__CURRENT = true`
+   - B) Filter on `__END_AT IS NULL` ✓
+   - C) Filter on `__START_AT IS NOT NULL`
+   - D) Take the row with the highest `__START_AT`
+
 ---
 
 ## Key Takeaways
@@ -401,10 +557,13 @@ ORDER BY
    - `@dlt.expect_or_drop()` = drop invalid rows
    - `@dlt.expect_or_fail()` = stop pipeline
 
-2. **CDC with apply_changes()**:
+2. **CDC with `apply_changes()`**:
    - `sequence_by` is critical for handling out-of-order events
-   - SCD Type 1 = current state only
-   - SCD Type 2 = full history with temporal columns
+   - SCD Type 1 = current state only (overwrites)
+   - SCD Type 2 = full history with `__START_AT` and `__END_AT` (no `__CURRENT` column)
+   - Current rows in SCD Type 2 = `__END_AT IS NULL`
+   - `track_history_column_list` and `track_history_except_column_list` are mutually exclusive
+   - `_rescued_data` only exists in Auto Loader sources, not Delta CDF sources
 
 3. **Pipeline Configuration**:
    - `target` = Unity Catalog destination (catalog.schema)
@@ -413,6 +572,7 @@ ORDER BY
 
 4. **Event Log**:
    - Located at `<storage>/system/events`
+   - Also viewable in the Lakeflow Pipelines Editor **Event log** tab (July 2026 UI)
    - Query with `delta.\`path\`` syntax
    - Contains flow_progress, data_quality, and metrics
 
@@ -420,6 +580,12 @@ ORDER BY
    - Use 3-level namespace: `catalog.schema.table`
    - Provides lineage, access control, and audit
    - Required for production DLT pipelines
+
+6. **July 2026 UI**:
+   - No separate "Workflows" in sidebar — use **Jobs & Pipelines** or **New → ETL Pipeline**
+   - Lakeflow Pipelines Editor replaces old notebook + pipeline form workflow
+   - `transformations/` = pipeline source code; `explorations/` = setup notebooks, test queries
+   - `import dlt` still works despite product rename to "Lakeflow Spark Declarative Pipelines"
 
 ---
 
