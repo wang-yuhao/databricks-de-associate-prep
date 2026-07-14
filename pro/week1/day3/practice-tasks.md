@@ -183,6 +183,8 @@ Many candidates confuse these three behaviors!
 
 Since no live CDC source is available, create mock data using a setup notebook. In the **Lakeflow Pipelines Editor**, click **➕** next to `explorations/` → **Notebook** → name it `setup_cdc_data` → **Python**.
 
+> ⚠️ **July 2026 note**: Run this notebook using **Run all** — it runs on a regular cluster (not inside the pipeline).
+
 **Cell 1 — Create schema and source table:**
 
 ```python
@@ -335,6 +337,7 @@ Re-run the pipeline and check that diana now has two rows in SCD Type 2.
 - Do **not** reference `_rescued_data` in `except_column_list` unless your source uses Auto Loader (`cloudFiles`)
 - SCD Type 2 does **not** generate a `__CURRENT` column — use `__END_AT IS NULL` to identify current rows
 - `sequence_by` is **required** to handle out-of-order CDC events; without it, late-arriving updates may corrupt your target table
+- Always add `apply_as_deletes` when your CDC source includes a DELETE operation column
 
 ---
 
@@ -457,6 +460,11 @@ ORDER BY
     timestamp DESC;
 ```
 
+> 💡 **July 2026 alternative**: If you published the event log to Unity Catalog (Task 3, Step 4), query it directly as a table instead of by path:
+> ```sql
+> SELECT * FROM your_catalog.your_schema.your_event_log_table WHERE event_type = 'flow_progress' ORDER BY timestamp DESC;
+> ```
+
 ### Step 3 — Monitor data quality metrics:
 
 ```sql
@@ -502,6 +510,18 @@ ORDER BY
 
 ---
 
+## Common Errors & Fixes (July 2026)
+
+| Error | Cause | Fix |
+|:--|:--|:--|
+| `ModuleNotFoundError: No module named 'dlt'` | Running DLT code on a regular cluster | Move code to `transformations/` folder and run via **Run pipeline** |
+| `_LEGACY_ERROR_TEMP_66_INVALID_TRACK_HISTORY_COLS` | Both `track_history_column_list` and `track_history_except_column_list` defined | Use only one of the two parameters |
+| `AnalysisException: _rescued_data` not found | Using `_rescued_data` in `except_column_list` for a Delta CDF source | Only use `_rescued_data` for Auto Loader (`cloudFiles`) sources |
+| CDC deletes not applied | Missing `apply_as_deletes` parameter | Add `apply_as_deletes="operation = 'DELETE'"` to `apply_changes()` |
+| SCD Type 2 missing `__CURRENT` column | `__CURRENT` was removed; use `__END_AT IS NULL` | Replace `__CURRENT = true` with `__END_AT IS NULL` in queries |
+
+---
+
 ## Concept Quiz
 
 1. What happens to rows that fail an `@dlt.expect_or_fail()` constraint?
@@ -538,55 +558,16 @@ ORDER BY
    - A) Only `track_history_column_list` takes effect
    - B) Only `track_history_except_column_list` takes effect
    - C) Databricks throws `_LEGACY_ERROR_TEMP_66_INVALID_TRACK_HISTORY_COLS` ✓
-   - D) Both are merged into a single allow-list
+   - D) The pipeline silently ignores one parameter
 
-7. For SCD Type 2, how do you identify the current (latest) version of a record?
-   - A) Filter on `__CURRENT = true`
-   - B) Filter on `__END_AT IS NULL` ✓
-   - C) Filter on `__START_AT IS NOT NULL`
-   - D) Take the row with the highest `__START_AT`
+7. How do you identify the current (active) row in an SCD Type 2 table created by `apply_changes()`?
+   - A) `WHERE __CURRENT = true`
+   - B) `WHERE __END_AT IS NULL` ✓
+   - C) `WHERE is_active = 1`
+   - D) `WHERE version = MAX(version)`
 
----
-
-## Key Takeaways
-
-✅ **For the exam, remember:**
-
-1. **DLT Expectations**: Three types with different behaviors
-   - `@dlt.expect()` = log only
-   - `@dlt.expect_or_drop()` = drop invalid rows
-   - `@dlt.expect_or_fail()` = stop pipeline
-
-2. **CDC with `apply_changes()`**:
-   - `sequence_by` is critical for handling out-of-order events
-   - SCD Type 1 = current state only (overwrites)
-   - SCD Type 2 = full history with `__START_AT` and `__END_AT` (no `__CURRENT` column)
-   - Current rows in SCD Type 2 = `__END_AT IS NULL`
-   - `track_history_column_list` and `track_history_except_column_list` are mutually exclusive
-   - `_rescued_data` only exists in Auto Loader sources, not Delta CDF sources
-
-3. **Pipeline Configuration**:
-   - `target` = Unity Catalog destination (catalog.schema)
-   - `storage` = DLT metadata location
-   - Continuous vs Triggered vs Full Refresh modes
-
-4. **Event Log**:
-   - Located at `<storage>/system/events`
-   - Also viewable in the Lakeflow Pipelines Editor **Event log** tab (July 2026 UI)
-   - Query with `delta.\`path\`` syntax
-   - Contains flow_progress, data_quality, and metrics
-
-5. **Unity Catalog Integration**:
-   - Use 3-level namespace: `catalog.schema.table`
-   - Provides lineage, access control, and audit
-   - Required for production DLT pipelines
-
-6. **July 2026 UI**:
-   - No separate "Workflows" in sidebar — use **Jobs & Pipelines** or **New → ETL Pipeline**
-   - Lakeflow Pipelines Editor replaces old notebook + pipeline form workflow
-   - `transformations/` = pipeline source code; `explorations/` = setup notebooks, test queries
-   - `import dlt` still works despite product rename to "Lakeflow Spark Declarative Pipelines"
-
----
-
-**Next Steps**: Review `study-notes.md` again, focusing on DLT architecture and pipeline lifecycle. Practice creating DLT pipelines with different expectation types and CDC scenarios.
+8. You want to run only one source file in your Lakeflow pipeline without re-running the entire pipeline. What do you do?
+   - A) Click **Full Refresh**
+   - B) Click **Run file** in the editor toolbar ✓
+   - C) Delete other transformation files temporarily
+   - D) Use `spark.sql("REFRESH TABLE ...")`
