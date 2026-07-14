@@ -11,8 +11,8 @@
 
 Work through each task **in order** — each one builds on the last. Every task has:
 
-- 📘 **Context** — why this matters for the exam
-- 🔧 **Instructions** — what you must do, step by step
+- 📖 **Context** — why this matters for the exam
+- 🛠️ **Instructions** — what you must do, step by step
 - ✅ **Expected outcome** — how to verify your answer
 - ⚠️ **Exam trap** — a common wrong-answer pitfall
 
@@ -20,9 +20,9 @@ Work through each task **in order** — each one builds on the last. Every task 
 
 ## Task 1 — Windowing and Watermarks in Streaming
 
-📘 **Context**: The Professional exam tests your understanding of time-based aggregations in streaming. You must know the difference between event time, processing time, tumbling windows, sliding windows, and session windows.
+📖 **Context**: The Professional exam tests your understanding of time-based aggregations in streaming. You must know the difference between event time, processing time, tumbling windows, sliding windows, and session windows.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Create a streaming source with event timestamps:
 
@@ -124,9 +124,9 @@ sliding_agg = (
 
 ## Task 2 — Stateful Streaming with mapGroupsWithState
 
-📘 **Context**: Advanced streaming scenarios require maintaining state across micro-batches. The exam tests `mapGroupsWithState` and `flatMapGroupsWithState` for custom stateful operations.
+📖 **Context**: Advanced streaming scenarios require maintaining state across micro-batches. The exam tests `mapGroupsWithState` and `flatMapGroupsWithState` for custom stateful operations.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Define state and event classes:
 
@@ -247,9 +247,9 @@ session_stream = (
 
 ## Task 3 — Stream-Stream Joins with Watermarks
 
-📘 **Context**: Joining two streaming DataFrames requires watermarks on both sides. The exam tests your understanding of join conditions, state management, and late data handling.
+📖 **Context**: Joining two streaming DataFrames requires watermarks on both sides. The exam tests your understanding of join conditions, state management, and late data handling.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Create two streaming sources:
 
@@ -371,9 +371,9 @@ left_joined_stream = (
 
 ## Task 4 — Streaming Deduplication and Foreachbatch
 
-📘 **Context**: Real-world streams often have duplicates. The exam tests deduplication strategies using `dropDuplicates()` with watermarks and custom logic with `foreachBatch()`.
+📖 **Context**: Real-world streams often have duplicates. The exam tests deduplication strategies using `dropDuplicates()` with watermarks and custom logic with `foreachBatch()`.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Deduplicate streaming data:
 
@@ -489,7 +489,9 @@ def upsert_batch(batch_df, batch_id):
 
 ---
 
-## Concept Quiz
+## Task 5 — Concept Quiz
+
+Answer these rapid-fire questions:
 
 1. What is the difference between tumbling and sliding windows?
    - A) Tumbling is faster
@@ -523,40 +525,40 @@ def upsert_batch(batch_df, batch_id):
 
 ---
 
-## Key Takeaways
+## Key Takeaways for the Exam
 
-✅ **For the exam, remember:**
+✅ **Windows and Watermarks:**
+- Tumbling: `window(col, "5 minutes")` — non-overlapping
+- Sliding: `window(col, "10 minutes", "5 minutes")` — overlapping
+- Watermark: `.withWatermark(col, "10 minutes")` before groupBy
+- Watermark prevents unbounded state growth
 
-1. **Windows and Watermarks**:
-   - Tumbling: `window(col, "5 minutes")` — non-overlapping
-   - Sliding: `window(col, "10 minutes", "5 minutes")` — overlapping
-   - Watermark: `.withWatermark(col, "10 minutes")` before groupBy
-   - Watermark prevents unbounded state growth
+✅ **Stateful Operations:**
+- `mapGroupsWithState`: Custom state per group
+- Requires timeout: `ProcessingTimeTimeout` or `EventTimeTimeout`
+- Must use `update` or `append` output mode
+- State persisted in checkpoint location
 
-2. **Stateful Operations**:
-   - `mapGroupsWithState`: Custom state per group
-   - Requires timeout: ProcessingTimeTimeout or EventTimeTimeout
-   - Must use `update` or `append` output mode
-   - State persisted in checkpoint location
+✅ **Stream-Stream Joins:**
+- MUST have watermarks on BOTH streams
+- MUST have time constraint to bound state
+- Inner join: Only matched events
+- Left outer join: All left events + matched right
+- `append` output mode only
 
-3. **Stream-Stream Joins**:
-   - MUST have watermarks on BOTH streams
-   - MUST have time constraint to bound state
-   - Inner join: Only matched events
-   - Left outer join: All left events + matched right
-   - `append` output mode only
+✅ **Deduplication and Custom Processing:**
+- `dropDuplicates()` needs watermark for state management
+- `foreachBatch()` enables complex custom logic
+- Use MERGE for idempotent upserts
+- Multiple writes possible in foreachBatch
 
-4. **Deduplication and Custom Processing**:
-   - `dropDuplicates()` needs watermark for state management
-   - `foreachBatch()` enables complex custom logic
-   - Use MERGE for idempotent upserts
-   - Multiple writes possible in foreachBatch
-
-5. **Output Modes**:
-   - `append`: Only new rows (default, works with watermarks)
-   - `update`: New and updated rows (stateful operations)
-   - `complete`: All rows (NOT supported with watermarks/joins)
+✅ **Output Modes:**
+- `append`: Only new rows (default, works with watermarks)
+- `update`: New and updated rows (stateful operations)
+- `complete`: All rows (NOT supported with watermarks/joins)
 
 ---
 
-**Next Steps**: Review `study-notes.md` focusing on streaming concepts. Practice with different window types, stateful transformations, and understand when to use each pattern.
+## Next Steps
+
+You've completed Day 5! You now understand Advanced Structured Streaming at a professional level. Tomorrow (Day 6), you'll cover Unity Catalog and Data Governance including namespaces, permissions, external locations, row/column security, and data lineage.

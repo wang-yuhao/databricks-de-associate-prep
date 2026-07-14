@@ -11,8 +11,8 @@
 
 Work through each task **in order** — each one builds on the last. Every task has:
 
-- 📘 **Context** — why this matters for the exam
-- 🔧 **Instructions** — what you must do, step by step
+- 📖 **Context** — why this matters for the exam
+- 🛠️ **Instructions** — what you must do, step by step
 - ✅ **Expected outcome** — how to verify your answer
 - ⚠️ **Exam trap** — a common wrong-answer pitfall
 
@@ -20,9 +20,9 @@ Work through each task **in order** — each one builds on the last. Every task 
 
 ## Task 1 — CDC with APPLY CHANGES INTO (SCD Type 1)
 
-📘 **Context**: The Professional exam heavily tests CDC patterns using `dlt.apply_changes()`. You must understand how SCD Type 1 maintains only current state and how `sequence_by` handles out-of-order events.
+📖 **Context**: The Professional exam heavily tests CDC patterns using `dlt.apply_changes()`. You must understand how SCD Type 1 maintains only current state and how `sequence_by` handles out-of-order events.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Create a bronze CDC source table:
 
@@ -117,9 +117,9 @@ def customer_count_verification():
 
 ## Task 2 — CDC with APPLY CHANGES INTO (SCD Type 2)
 
-📘 **Context**: SCD Type 2 maintains full history with temporal columns. The exam tests your understanding of `__START_AT`, `__END_AT`, and `__CURRENT` columns that DLT automatically creates.
+📖 **Context**: SCD Type 2 maintains full history with temporal columns. The exam tests your understanding of `__START_AT`, `__END_AT`, and `__CURRENT` columns that DLT automatically creates.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Apply CDC with SCD Type 2 (full history):
 
@@ -207,9 +207,9 @@ def customer_change_frequency():
 
 ## Task 3 — CDC with Delete Operations
 
-📘 **Context**: Handling deletes in CDC is tricky. The exam tests whether you understand how `apply_changes()` processes delete events differently in Type 1 vs Type 2.
+📖 **Context**: Handling deletes in CDC is tricky. The exam tests whether you understand how `apply_changes()` processes delete events differently in Type 1 vs Type 2.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — Configure CDC source with delete handling:
 
@@ -306,9 +306,9 @@ def deleted_products_audit():
 
 ## Task 4 — Advanced CDC: Multiple Keys and Ignore Null Updates
 
-📘 **Context**: Real-world CDC often involves composite keys and handling NULL values. The exam may test edge cases like multi-column keys and `ignore_null_updates`.
+📖 **Context**: Real-world CDC often involves composite keys and handling NULL values. The exam may test edge cases like multi-column keys and `ignore_null_updates`.
 
-🔧 **Instructions**:
+🛠️ **Instructions**:
 
 ### Step 1 — CDC with composite keys:
 
@@ -391,7 +391,9 @@ def order_line_validation():
 
 ---
 
-## Concept Quiz
+## Task 5 — Concept Quiz
+
+Answer these rapid-fire questions:
 
 1. What is the key difference between SCD Type 1 and Type 2 in DLT?
    - A) Type 1 is faster
@@ -425,39 +427,39 @@ def order_line_validation():
 
 ---
 
-## Key Takeaways
+## Key Takeaways for the Exam
 
-✅ **For the exam, remember:**
+✅ **SCD Type 1 vs Type 2:**
+- **Type 1** = Current state only (updates overwrite)
+- **Type 2** = Full history with temporal columns
+- Choose based on audit requirements
 
-1. **SCD Type 1 vs Type 2**:
-   - Type 1 = Current state only (updates overwrite)
-   - Type 2 = Full history with temporal columns
-   - Choose based on audit requirements
+✅ **sequence_by is Critical:**
+- Required to handle out-of-order events
+- Must be a timestamp or monotonically increasing column
+- NULL values cause pipeline failure
+- Without it, late updates can corrupt data
 
-2. **sequence_by is Critical**:
-   - Required to handle out-of-order events
-   - Must be a timestamp or monotonically increasing column
-   - NULL values cause pipeline failure
-   - Without it, late updates can corrupt data
+✅ **SCD Type 2 Temporal Columns:**
+- `__START_AT`: When version became active
+- `__END_AT`: When version was superseded (NULL = current)
+- `__CURRENT`: Boolean for latest version
+- Created AUTOMATICALLY by DLT
 
-3. **SCD Type 2 Temporal Columns**:
-   - `__START_AT`: When version became active
-   - `__END_AT`: When version was superseded (NULL = current)
-   - `__CURRENT`: Boolean for latest version
-   - Created AUTOMATICALLY by DLT
+✅ **Delete Handling:**
+- `apply_as_deletes`: Expression to identify delete events
+- Type 1: Physical deletion
+- Type 2: Logical deletion (`__CURRENT = False`)
+- Always use Type 2 for compliance/audit
 
-4. **Delete Handling**:
-   - `apply_as_deletes`: Expression to identify delete events
-   - Type 1: Physical deletion
-   - Type 2: Logical deletion (__CURRENT = False)
-   - Always use Type 2 for compliance/audit
-
-5. **Advanced Features**:
-   - Composite keys: `keys=["col1", "col2"]`
-   - `ignore_null_updates`: Prevents NULLs from overwriting
-   - `except_column_list`: Removes metadata columns
-   - `track_history_column_list`: Specifies version-triggering columns (Type 2)
+✅ **Advanced Features:**
+- Composite keys: `keys=["col1", "col2"]`
+- `ignore_null_updates`: Prevents NULLs from overwriting
+- `except_column_list`: Removes metadata columns
+- `track_history_column_list`: Specifies version-triggering columns (Type 2)
 
 ---
 
-**Next Steps**: Review `study-notes.md` focusing on CDC patterns and APPLY CHANGES INTO syntax. Practice with both SCD types and understand when to use each.
+## Next Steps
+
+You've completed Day 4! You now understand CDC patterns with Delta Live Tables at a professional level. Tomorrow (Day 5), you'll cover Advanced Structured Streaming including windowing, watermarks, stateful transformations, and stream-stream joins.
