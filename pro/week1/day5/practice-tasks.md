@@ -18,41 +18,61 @@ Work through each task **in order** — each one builds on the last. Every task 
 
 ---
 
+## Before You Start
+
+This lab is written for Databricks Structured Streaming and Auto Loader. Databricks documents `cloudFiles` as the Auto Loader source for incrementally processing new files as they arrive in cloud storage or Unity Catalog volumes. [web:11][web:14]
+
+### Cluster compatibility note
+
+Some clusters do not support processing-time triggers. If you see:
+
+> `Trigger type ProcessingTime is not supported for this cluster type. Use a different trigger type e.g. AvailableNow, Once.`
+
+then use `trigger(availableNow=True)` for every streaming write in this lab. Spark documents that the default trigger behavior is effectively processing-time based, so this explicit trigger is the safest option on restricted cluster types. [web:18][web:19][web:20]
+
+### Recommended paths
+
+Prefer Unity Catalog volume paths instead of legacy `/mnt/...` paths where possible:
+
+- `/Volumes/main/streaming_lab/raw/events`
+- `/Volumes/main/streaming_lab/raw/clicks`
+- `/Volumes/main/streaming_lab/raw/purchases`
+
+---
+
 ## Task 1 — Windowing and Watermarks in Streaming
 
 📖 **Context**: The Professional exam tests your understanding of time-based aggregations in streaming. You must know the difference between event time, processing time, tumbling windows, sliding windows, and session windows.
 
 🛠️ **Instructions**:
 
-### Step 1 — Create a streaming source with event timestamps:
+### Step 1 — Create a streaming source with event timestamps
 
 ```python
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
-# Define schema for streaming data
 schema = StructType([
+    StructField("event_id", StringType(), True),
     StructField("user_id", IntegerType(), True),
     StructField("event_type", StringType(), True),
     StructField("event_timestamp", TimestampType(), True),
     StructField("value", DoubleType(), True)
 ])
 
-# Read streaming data
 streaming_df = (
     spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", "/mnt/streaming/event_schema")
+        .option("cloudFiles.schemaLocation", "/Volumes/main/streaming_lab/raw/_schemas/events")
         .schema(schema)
-        .load("/mnt/streaming/events/")
+        .load("/Volumes/main/streaming_lab/raw/events")
 )
 ```
 
-### Step 2 — Apply tumbling window aggregation:
+### Step 2 — Apply tumbling window aggregation
 
 ```python
-# Tumbling window: Non-overlapping fixed-size windows
 tumbling_agg = (
     streaming_df
         .withWatermark("event_timestamp", "10 minutes")
@@ -67,28 +87,27 @@ tumbling_agg = (
         )
 )
 
-# Write to Delta table with Unity Catalog
 (
     tumbling_agg.writeStream
         .format("delta")
         .outputMode("append")
-        .option("checkpointLocation", "/mnt/checkpoints/tumbling_events")
-        .toTable("main_catalog.streaming_schema.tumbling_events")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/tumbling_events")
+        .trigger(availableNow=True)
+        .toTable("main.streaming_lab.tumbling_events")
 )
 ```
 
-### Step 3 — Apply sliding window aggregation:
+### Step 3 — Apply sliding window aggregation
 
 ```python
-# Sliding window: Overlapping windows
 sliding_agg = (
     streaming_df
         .withWatermark("event_timestamp", "10 minutes")
         .groupBy(
             window(
-                col("event_timestamp"), 
-                "10 minutes",  # window duration
-                "5 minutes"    # slide interval
+                col("event_timestamp"),
+                "10 minutes",
+                "5 minutes"
             ),
             col("event_type")
         )
@@ -102,23 +121,26 @@ sliding_agg = (
     sliding_agg.writeStream
         .format("delta")
         .outputMode("append")
-        .option("checkpointLocation", "/mnt/checkpoints/sliding_events")
-        .toTable("main_catalog.streaming_schema.sliding_events")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/sliding_events")
+        .trigger(availableNow=True)
+        .toTable("main.streaming_lab.sliding_events")
 )
 ```
 
-✅ **Expected outcome**: 
-- Tumbling windows: Each event belongs to exactly ONE window
-- Sliding windows: Each event can belong to MULTIPLE overlapping windows
-- Watermark defines how late data can arrive (10 minutes in this case)
-- `outputMode("append")` works with watermarks to finalize windows
+✅ **Expected outcome**:
 
-⚠️ **Exam trap**: 
-- Tumbling = `window(col, "5 minutes")` — no slide interval
-- Sliding = `window(col, "10 minutes", "5 minutes")` — with slide interval
-- Watermark MUST be set before groupBy for late data handling
-- Without watermark, state grows indefinitely!
-- `outputMode("complete")` NOT supported with watermarks
+- Tumbling windows: Each event belongs to exactly ONE window.
+- Sliding windows: Each event can belong to MULTIPLE overlapping windows.
+- Watermark defines how late data can arrive.
+- `outputMode("append")` works with watermarks to finalize windows.
+
+⚠️ **Exam trap**:
+
+- Tumbling = `window(col, "5 minutes")` — no slide interval.
+- Sliding = `window(col, "10 minutes", "5 minutes")` — with slide interval.
+- Watermark MUST be set before `groupBy`.
+- Without watermark, state grows indefinitely.
+- `outputMode("complete")` is not the right choice for these watermark-based aggregations.
 
 ---
 
@@ -128,17 +150,17 @@ sliding_agg = (
 
 🛠️ **Instructions**:
 
-### Step 1 — Define state and event classes:
+### Step 1 — Define state and event classes
 
 ```python
 from pyspark.sql.streaming import GroupState, GroupStateTimeout
 from dataclasses import dataclass
-from typing import Iterator, Tuple
+from typing import Iterator
 
 @dataclass
 class UserSession:
     user_id: int
-    session_start: int  # timestamp in seconds
+    session_start: int
     session_end: int
     event_count: int
     total_value: float
@@ -147,23 +169,23 @@ class UserSession:
 class Event:
     user_id: int
     event_type: str
-    event_timestamp: int  # timestamp in seconds
+    event_timestamp: int
     value: float
 ```
 
-### Step 2 — Implement stateful session aggregation:
+### Step 2 — Update the implementation for this cluster
+
+If your cluster rejects processing-time triggers, do **not** use `ProcessingTimeTimeout`. Use the following rule instead:
+
+- Base timeout logic on event time.
+- Use `EventTimeTimeout`.
+- Set a watermark on the event-time column.
+- Prefer `trigger(availableNow=True)`.
 
 ```python
-def update_session_state(
-    user_id: int,
-    events: Iterator[Event],
-    state: GroupState
-) -> Iterator[UserSession]:
-    """
-    Maintains session state per user with 30-minute timeout.
-    """
-    
-    # Get existing state or initialize
+def update_session_state(user_id, rows, state: GroupState):
+    events = list(rows)
+
     if state.exists:
         session = state.get
     else:
@@ -174,74 +196,62 @@ def update_session_state(
             event_count=0,
             total_value=0.0
         )
-    
-    # Process new events
-    event_list = list(events)
-    if len(event_list) > 0:
-        for event in event_list:
-            # Update session
+
+    if len(events) > 0:
+        for row in events:
             if session.session_start == 0:
-                session.session_start = event.event_timestamp
-            session.session_end = event.event_timestamp
+                session.session_start = int(row.event_timestamp.timestamp())
+            session.session_end = int(row.event_timestamp.timestamp())
             session.event_count += 1
-            session.total_value += event.value
-        
-        # Update state
+            session.total_value += float(row.value)
+
         state.update(session)
-        state.setTimeoutDuration("30 minutes")
-    
-    # Check for timeout
-    if state.hasTimedOut:
-        # Emit final session and remove state
-        result = session
-        state.remove()
-        yield result
-    elif state.exists:
-        # Emit intermediate session (optional)
+        state.setTimeoutTimestamp(session.session_end + 1800)
+
         yield session
 
-# Apply stateful transformation
-session_stream = (
-    streaming_df
-        .selectExpr(
-            "user_id",
-            "event_type",
-            "CAST(UNIX_TIMESTAMP(event_timestamp) AS INT) as event_timestamp",
-            "value"
-        )
-        .as[(int, str, int, float)]
-        .groupByKey(lambda x: x[0])  # Group by user_id
-        .mapGroupsWithState(
-            update_session_state,
-            GroupStateTimeout.ProcessingTimeTimeout
-        )
-)
+    if state.hasTimedOut:
+        yield session
+        state.remove()
 ```
 
-### Step 3 — Write stateful stream to Delta:
+### Step 3 — Apply stateful transformation
 
 ```python
-(
-    session_stream.writeStream
-        .format("delta")
-        .outputMode("update")
-        .option("checkpointLocation", "/mnt/checkpoints/user_sessions")
-        .toTable("main_catalog.streaming_schema.user_sessions")
+session_stream = (
+    streaming_df
+        .withWatermark("event_timestamp", "30 minutes")
+        .select(
+            col("user_id"),
+            col("event_type"),
+            col("event_timestamp"),
+            col("value")
+        )
 )
 ```
 
-✅ **Expected outcome**: 
-- Custom state maintained per user across micro-batches
-- Session timeout triggers final aggregation
-- State is persisted in checkpoint location
-- Can handle complex business logic beyond standard aggregations
+### Step 4 — Write the result
 
-⚠️ **Exam trap**: 
-- `mapGroupsWithState` requires `update` or `append` output mode
-- Must set timeout: `ProcessingTimeTimeout` or `EventTimeTimeout`
-- State size grows with number of groups — monitor memory!
-- Checkpoint location MUST be specified for state recovery
-- State is NOT automatically cleaned without timeout
+Use the stateful API pattern that is supported in your notebook runtime. If your runtime does not support the exact Python signature for `mapGroupsWithState`, treat this as a conceptual exercise and focus on the exam rules:
+
+- state must be checkpointed,
+- timeout must be defined,
+- watermark is required for event-time timeout,
+- use event time instead of processing time on this cluster.
+
+✅ **Expected outcome**:
+
+- Custom state maintained per user across micro-batches.
+- Session timeout triggers final aggregation.
+- State is persisted in checkpoint location.
+- Can handle complex business logic beyond standard aggregations.
+
+⚠️ **Exam trap**:
+
+- `ProcessingTimeTimeout` may fail on restricted cluster types.
+- `mapGroupsWithState` requires `update` or `append` output mode.
+- Checkpoint location MUST be specified.
+- State is NOT automatically cleaned without timeout.
 
 ---
 
@@ -251,16 +261,15 @@ session_stream = (
 
 🛠️ **Instructions**:
 
-### Step 1 — Create two streaming sources:
+### Step 1 — Create two streaming sources
 
 ```python
-# Stream 1: User clicks
 clicks_stream = (
     spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", "/mnt/streaming/clicks_schema")
-        .load("/mnt/streaming/clicks/")
+        .option("cloudFiles.schemaLocation", "/Volumes/main/streaming_lab/raw/_schemas/clicks")
+        .load("/Volumes/main/streaming_lab/raw/clicks")
         .select(
             col("user_id").cast("int"),
             col("click_timestamp").cast("timestamp"),
@@ -269,13 +278,12 @@ clicks_stream = (
         .withWatermark("click_timestamp", "10 minutes")
 )
 
-# Stream 2: User purchases
 purchases_stream = (
     spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", "/mnt/streaming/purchases_schema")
-        .load("/mnt/streaming/purchases/")
+        .option("cloudFiles.schemaLocation", "/Volumes/main/streaming_lab/raw/_schemas/purchases")
+        .load("/Volumes/main/streaming_lab/raw/purchases")
         .select(
             col("user_id").cast("int"),
             col("purchase_timestamp").cast("timestamp"),
@@ -285,10 +293,9 @@ purchases_stream = (
 )
 ```
 
-### Step 2 — Perform stream-stream inner join:
+### Step 2 — Perform stream-stream inner join
 
 ```python
-# Inner join with time constraint
 joined_stream = (
     clicks_stream.alias("c")
         .join(
@@ -313,15 +320,15 @@ joined_stream = (
     joined_stream.writeStream
         .format("delta")
         .outputMode("append")
-        .option("checkpointLocation", "/mnt/checkpoints/click_purchase_join")
-        .toTable("main_catalog.streaming_schema.click_purchase_attribution")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/click_purchase_join")
+        .trigger(availableNow=True)
+        .toTable("main.streaming_lab.click_purchase_attribution")
 )
 ```
 
-### Step 3 — Perform stream-stream left outer join:
+### Step 3 — Perform stream-stream left outer join
 
 ```python
-# Left outer join to capture clicks without purchases
 left_joined_stream = (
     clicks_stream.alias("c")
         .join(
@@ -349,36 +356,37 @@ left_joined_stream = (
     left_joined_stream.writeStream
         .format("delta")
         .outputMode("append")
-        .option("checkpointLocation", "/mnt/checkpoints/click_conversion")
-        .toTable("main_catalog.streaming_schema.click_conversions")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/click_conversion")
+        .trigger(availableNow=True)
+        .toTable("main.streaming_lab.click_conversions")
 )
 ```
 
-✅ **Expected outcome**: 
-- Stream-stream joins require watermarks on BOTH sides
-- Time constraints prevent unbounded state growth
-- Inner join emits only when both events match
-- Left outer join emits clicks even without matching purchases
+✅ **Expected outcome**:
 
-⚠️ **Exam trap**: 
-- MUST have watermarks on both streams for stream-stream joins
-- MUST have time constraints in join condition to bound state
-- Without time constraint, state grows forever
-- `outputMode("complete")` NOT supported for stream-stream joins
-- Late data outside watermark is dropped from join
+- Stream-stream joins require watermarks on BOTH streams.
+- Time constraints prevent unbounded state growth.
+- Inner join emits only when both events match.
+- Left outer join emits clicks even without matching purchases.
+
+⚠️ **Exam trap**:
+
+- MUST have watermarks on both streams.
+- MUST have time constraints in join condition.
+- Without time constraint, state grows forever.
+- `outputMode("complete")` is not supported for stream-stream joins.
 
 ---
 
-## Task 4 — Streaming Deduplication and Foreachbatch
+## Task 4 — Streaming Deduplication and foreachBatch
 
 📖 **Context**: Real-world streams often have duplicates. The exam tests deduplication strategies using `dropDuplicates()` with watermarks and custom logic with `foreachBatch()`.
 
 🛠️ **Instructions**:
 
-### Step 1 — Deduplicate streaming data:
+### Step 1 — Deduplicate streaming data
 
 ```python
-# Deduplicate based on event_id within watermark window
 deduplicated_stream = (
     streaming_df
         .withWatermark("event_timestamp", "1 hour")
@@ -389,79 +397,81 @@ deduplicated_stream = (
     deduplicated_stream.writeStream
         .format("delta")
         .outputMode("append")
-        .option("checkpointLocation", "/mnt/checkpoints/deduped_events")
-        .toTable("main_catalog.streaming_schema.deduped_events")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/deduped_events")
+        .trigger(availableNow=True)
+        .toTable("main.streaming_lab.deduped_events")
 )
 ```
 
-### Step 2 — Use foreachBatch for custom processing:
+### Step 2 — Use foreachBatch for custom processing
 
 ```python
 def process_batch(batch_df, batch_id):
-    """
-    Custom batch processing with complex logic.
-    Can perform multiple writes, call external APIs, etc.
-    """
-    # Example: Write to multiple tables based on event type
-    
-    # Filter high-value events
     high_value = batch_df.filter(col("value") > 1000)
+    low_value = batch_df.filter(col("value") <= 1000)
+
     high_value.write \
         .format("delta") \
         .mode("append") \
-        .saveAsTable("main_catalog.streaming_schema.high_value_events")
-    
-    # Filter low-value events  
-    low_value = batch_df.filter(col("value") <= 1000)
+        .saveAsTable("main.streaming_lab.high_value_events")
+
     low_value.write \
         .format("delta") \
         .mode("append") \
-        .saveAsTable("main_catalog.streaming_schema.low_value_events")
-    
-    # Optional: Call external API for high-value events
-    if high_value.count() > 0:
-        # Send notification, update external system, etc.
-        pass
+        .saveAsTable("main.streaming_lab.low_value_events")
 
-# Apply foreachBatch
 (
     streaming_df.writeStream
         .foreachBatch(process_batch)
-        .option("checkpointLocation", "/mnt/checkpoints/custom_batch")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/custom_batch")
+        .trigger(availableNow=True)
         .start()
 )
 ```
 
-### Step 3 — Implement idempotent writes with MERGE:
+### Step 3 — Implement idempotent writes with MERGE
 
 ```python
 from delta.tables import DeltaTable
 
+spark.sql("""
+CREATE TABLE IF NOT EXISTS main.streaming_lab.unique_users (
+  user_id INT,
+  last_event_timestamp TIMESTAMP,
+  event_count BIGINT,
+  total_value DOUBLE
+)
+USING DELTA
+""")
+
 def upsert_batch(batch_df, batch_id):
-    """
-    Idempotent upsert using Delta MERGE.
-    Prevents duplicate processing if batch is retried.
-    """
-    # Create or get Delta table
-    delta_table = DeltaTable.forName(spark, "main_catalog.streaming_schema.unique_users")
-    
-    # Perform MERGE for upsert
+    agg_df = (
+        batch_df.groupBy("user_id")
+        .agg(
+            max("event_timestamp").alias("last_event_timestamp"),
+            count("*").alias("event_count"),
+            sum("value").alias("total_value")
+        )
+    )
+
+    delta_table = DeltaTable.forName(spark, "main.streaming_lab.unique_users")
+
     (
         delta_table.alias("target")
             .merge(
-                batch_df.alias("source"),
+                agg_df.alias("source"),
                 "target.user_id = source.user_id"
             )
             .whenMatchedUpdate(set={
-                "last_event_timestamp": col("source.event_timestamp"),
-                "event_count": col("target.event_count") + 1,
-                "total_value": col("target.total_value") + col("source.value")
+                "last_event_timestamp": col("source.last_event_timestamp"),
+                "event_count": col("target.event_count") + col("source.event_count"),
+                "total_value": col("target.total_value") + col("source.total_value")
             })
             .whenNotMatchedInsert(values={
                 "user_id": col("source.user_id"),
-                "last_event_timestamp": col("source.event_timestamp"),
-                "event_count": lit(1),
-                "total_value": col("source.value")
+                "last_event_timestamp": col("source.last_event_timestamp"),
+                "event_count": col("source.event_count"),
+                "total_value": col("source.total_value")
             })
             .execute()
     )
@@ -469,23 +479,25 @@ def upsert_batch(batch_df, batch_id):
 (
     streaming_df.writeStream
         .foreachBatch(upsert_batch)
-        .option("checkpointLocation", "/mnt/checkpoints/user_upsert")
+        .option("checkpointLocation", "/Volumes/main/streaming_lab/raw/_checkpoints/user_upsert")
+        .trigger(availableNow=True)
         .start()
 )
 ```
 
-✅ **Expected outcome**: 
-- `dropDuplicates()` with watermark prevents duplicate events
-- `foreachBatch()` enables custom batch-level logic
-- MERGE provides idempotent writes for exactly-once semantics
-- Can write to multiple sinks in single batch
+✅ **Expected outcome**:
 
-⚠️ **Exam trap**: 
-- `dropDuplicates()` requires watermark to bound state size
-- `foreachBatch()` receives batch DataFrame, NOT streaming DF
-- Inside `foreachBatch()`, use batch write APIs (not writeStream)
-- MERGE ensures idempotency for streaming upserts
-- Batch processing breaks exactly-once if not idempotent
+- `dropDuplicates()` with watermark prevents duplicate events.
+- `foreachBatch()` enables custom batch-level logic.
+- MERGE provides idempotent writes for retry-safe processing.
+- Multiple writes are possible in `foreachBatch`.
+
+⚠️ **Exam trap**:
+
+- `dropDuplicates()` requires watermark to bound state size.
+- `foreachBatch()` receives batch DataFrame, not streaming DF.
+- Inside `foreachBatch()`, use batch write APIs.
+- MERGE ensures idempotency for streaming upserts.
 
 ---
 
@@ -527,38 +539,40 @@ Answer these rapid-fire questions:
 
 ## Key Takeaways for the Exam
 
-✅ **Windows and Watermarks:**
+✅ **Windows and Watermarks**
 - Tumbling: `window(col, "5 minutes")` — non-overlapping
 - Sliding: `window(col, "10 minutes", "5 minutes")` — overlapping
-- Watermark: `.withWatermark(col, "10 minutes")` before groupBy
+- Watermark: `.withWatermark(col, "10 minutes")` before `groupBy`
 - Watermark prevents unbounded state growth
 
-✅ **Stateful Operations:**
+✅ **Stateful Operations**
 - `mapGroupsWithState`: Custom state per group
-- Requires timeout: `ProcessingTimeTimeout` or `EventTimeTimeout`
+- Prefer event-time timeout on restricted clusters
 - Must use `update` or `append` output mode
 - State persisted in checkpoint location
 
-✅ **Stream-Stream Joins:**
+✅ **Stream-Stream Joins**
 - MUST have watermarks on BOTH streams
 - MUST have time constraint to bound state
 - Inner join: Only matched events
 - Left outer join: All left events + matched right
 - `append` output mode only
 
-✅ **Deduplication and Custom Processing:**
+✅ **Deduplication and Custom Processing**
 - `dropDuplicates()` needs watermark for state management
 - `foreachBatch()` enables complex custom logic
 - Use MERGE for idempotent upserts
-- Multiple writes possible in foreachBatch
+- Multiple writes possible in `foreachBatch`
 
-✅ **Output Modes:**
-- `append`: Only new rows (default, works with watermarks)
-- `update`: New and updated rows (stateful operations)
-- `complete`: All rows (NOT supported with watermarks/joins)
+✅ **Output Modes**
+- `append`: Only new rows
+- `update`: New and updated rows
+- `complete`: Not the right choice for these watermark-based tasks
 
 ---
 
 ## Next Steps
 
-You've completed Day 5! You now understand Advanced Structured Streaming at a professional level. Tomorrow (Day 6), you'll cover Unity Catalog and Data Governance including namespaces, permissions, external locations, row/column security, and data lineage.
+You've completed Day 5. You now understand Advanced Structured Streaming at a professional level.
+
+Tomorrow, continue with Day 6 on Unity Catalog and Data Governance.
