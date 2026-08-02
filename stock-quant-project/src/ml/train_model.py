@@ -16,6 +16,7 @@ compare model versions the same way you'd use MLflow on Databricks.
 """
 import argparse
 import os
+from pathlib import Path
 
 import joblib
 import mlflow
@@ -142,8 +143,8 @@ def main():
         spark.createDataFrame(preds_pdf).write.format("delta").mode("overwrite").option(
             "overwriteSchema", "true"
         ).save(preds_path)
-        spark.sql(f"CREATE TABLE IF NOT EXISTS gold.model_predictions USING DELTA LOCATION '{preds_path}'")
-        print(f"\nWrote held-out test-set predictions -> {preds_path} (input to the backtester)")
+        preds_uri = Path(preds_path).resolve().as_uri()
+        spark.sql(f"CREATE TABLE IF NOT EXISTS gold.model_predictions USING DELTA LOCATION '{preds_uri}'")
 
     spark.stop()
 
