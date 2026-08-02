@@ -23,29 +23,29 @@ def log_run(spark, cfg, stage, rows_in, rows_out, rows_quarantined, duration_sec
     monitoring_root = resolve_path(cfg, "delta.warehouse_path")
     table_path = f"{monitoring_root}/monitoring/pipeline_runs"
 
-        schema = StructType([
-            StructField("stage", StringType(), True),
-            StructField("rows_in", LongType(), True),
-            StructField("rows_out", LongType(), True),
-            StructField("rows_quarantined", LongType(), True),
-            StructField("duration_seconds", DoubleType(), True),
-        ])
-        row = spark.createDataFrame(
-            [
-                (
-                    stage,
-                    int(rows_in),
-                    int(rows_out),
-                    int(rows_quarantined),
-                    float(duration_seconds) if duration_seconds is not None else None,
-                )
-            ],
-            schema=schema,
-        ).withColumn("run_ts", F.current_timestamp())
+    schema = StructType([
+        StructField("stage", StringType(), True),
+        StructField("rows_in", LongType(), True),
+        StructField("rows_out", LongType(), True),
+        StructField("rows_quarantined", LongType(), True),
+        StructField("duration_seconds", DoubleType(), True),
+    ])
+    row = spark.createDataFrame(
+        [
+            (
+                stage,
+                int(rows_in),
+                int(rows_out),
+                int(rows_quarantined),
+                float(duration_seconds) if duration_seconds is not None else None,
+            )
+        ],
+        schema=schema,
+    ).withColumn("run_ts", F.current_timestamp())
     row.write.format("delta").mode("append").option("mergeSchema", "true").save(table_path)
-        table_uri = Path(table_path).resolve().as_uri()
-        spark.sql("CREATE SCHEMA IF NOT EXISTS monitoring")
-        spark.sql(f"CREATE TABLE IF NOT EXISTS monitoring.pipeline_runs USING DELTA LOCATION '{table_uri}'")
+    table_uri = Path(table_path).resolve().as_uri()
+    spark.sql("CREATE SCHEMA IF NOT EXISTS monitoring")
+    spark.sql(f"CREATE TABLE IF NOT EXISTS monitoring.pipeline_runs USING DELTA LOCATION '{table_uri}'")
 
 
 def maybe_alert(cfg, stage, quarantine_rate):
