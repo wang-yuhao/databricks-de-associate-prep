@@ -101,10 +101,10 @@ def generate_synthetic_trades(symbols, bars_df: pd.DataFrame, per_day: int = 30,
     for sym in symbols:
         sym_bars = bars_df[bars_df["symbol"] == sym]
         for _, bar in sym_bars.iterrows():
-                                            lo, hi = min(bar["low"], bar["high"]), max(bar["low"], bar["high"])
-                if hi <= lo:
-                    hi = lo + 0.01
-                prices = rng.uniform(lo, hi, per_day)
+            lo, hi = min(bar["low"], bar["high"]), max(bar["low"], bar["high"])
+            if hi <= lo:
+                hi = lo + 0.01
+            prices = rng.uniform(lo, hi, per_day)
             for k, px in enumerate(prices):
                 ts = bar["timestamp"] + pd.Timedelta(minutes=int(390 * k / per_day))
                 rows.append(
