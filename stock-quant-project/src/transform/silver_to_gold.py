@@ -78,9 +78,9 @@ def run(spark, cfg):
         .partitionBy("symbol")
         .save(gold_path)
     )
-        gold_uri = Path(gold_path).resolve().as_uri()
-        spark.sql("CREATE SCHEMA IF NOT EXISTS gold")
-        spark.sql(f"CREATE TABLE IF NOT EXISTS gold.features USING DELTA LOCATION '{gold_uri}'")
+    gold_uri = Path(gold_path).resolve().as_uri()
+    spark.sql("CREATE SCHEMA IF NOT EXISTS gold")
+    spark.sql(f"CREATE TABLE IF NOT EXISTS gold.features USING DELTA LOCATION '{gold_uri}'")
 
     n = gold.count()
     print(f"[gold:features] wrote {n} rows, {len(gold.columns)} columns -> {gold_path}")
