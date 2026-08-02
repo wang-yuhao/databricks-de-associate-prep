@@ -9,6 +9,7 @@ what `APPLY CHANGES INTO` gives you in Lakeflow Declarative Pipelines: idempoten
 upserts, safe to re-run, and the pattern the exam's CDC objective is testing.
 """
 import argparse
+from pathlib import Path
 
 from delta.tables import DeltaTable
 from pyspark.sql import functions as F
@@ -58,11 +59,13 @@ def run(spark, cfg, table_key="bars"):
     print(f"[silver:{table_key}] good={n_good} bad={n_bad} quarantine_rate={rate:.2f}%")
 
     # --- quarantine (append-only audit trail of rejected rows) ---
-    if n_bad > 0:
-        bad.write.format("delta").mode("append").option("mergeSchema", "true").save(quarantine_path)
-        spark.sql(
-            f"CREATE TABLE IF NOT EXISTS bronze.{table_key}_quarantine USING DELTA LOCATION '{quarantine_path}'"
-        )
+            if n_bad > 0:
+            bad.write.format("delta").mode("append").option("mergeSchema", "true").save(quarantine_path)
+            quarantine_uri = Path(quarantine_path).resolve().as_uri()
+            spark.sql("CREATE SCHEMA IF NOT EXISTS bronze")
+            spark.sql(
+                f"CREATE TABLE IF NOT EXISTS bronze.{table_key}_quarantine USING DELTA LOCATION '{quarantine_uri}'"
+            )
 
     # --- upsert good rows into silver ---
     if not DeltaTable.isDeltaTable(spark, silver_path):
@@ -77,7 +80,9 @@ def run(spark, cfg, table_key="bars"):
             .whenNotMatchedInsertAll()
             .execute()
         )
-    spark.sql(f"CREATE TABLE IF NOT EXISTS silver.{table_key} USING DELTA LOCATION '{silver_path}'")
+        silver_uri = Path(silver_path).resolve().as_uri()
+        spark.sql("CREATE SCHEMA IF NOT EXISTS silver")
+        spark.sql(f"CREATE TABLE IF NOT EXISTS silver.{table_key} USING DELTA LOCATION '{silver_uri}'")
 
     log_run(spark, cfg, stage=f"silver:{table_key}", rows_in=raw.count(), rows_out=n_good, rows_quarantined=n_bad)
     maybe_alert(cfg, stage=f"silver:{table_key}", quarantine_rate=rate)
