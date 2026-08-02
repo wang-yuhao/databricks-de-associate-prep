@@ -7,6 +7,28 @@ you'd get from Unity Catalog on Databricks.
 from delta import configure_spark_with_delta_pip
 from pyspark.sql import SparkSession
 
+import shutil
+from pathlib import Path
+
+
+def _cleanup_stale_spark_temp_dirs(local_dir: str) -> None:
+    """Best-effort cleanup of leftover spark-*/userFiles-* dirs from prior runs.
+
+    On Windows, the JVM can hold file locks on JARs copied into Spark's temp
+    dir (e.g. antlr4-runtime-*.jar) even after SparkContext.stop() returns,
+    so Spark itself fails to delete them ("Failed to delete: ...jar") and logs
+    a WARN on every run. By the time a *new* run starts, the previous JVM has
+    fully exited and released those locks, so it's safe to sweep them here.
+    """
+    root = Path(local_dir)
+    if not root.exists():
+        return
+    for entry in root.glob("spark-*"):
+        try:
+            shutil.rmtree(entry, ignore_errors=True)
+        except Exception:
+            pass
+
 # Java 17+/21 locks down internals that Arrow (used by Pandas UDFs, applyInPandas,
 # and toPandas()) needs reflective access to. Without these --add-opens flags you'll
 # hit "sun.misc.Unsafe or java.nio.DirectByteBuffer.<init> not available" the first
@@ -26,6 +48,10 @@ def get_spark(cfg: dict) -> SparkSession:
     spark_cfg = cfg["spark"]
     warehouse_dir = cfg["delta"]["spark_warehouse_dir"]
 
+    local_tmp_dir = str(Path(warehouse_dir).parent / "spark_tmp")
+    Path(local_tmp_dir).mkdir(parents=True, exist_ok=True)
+    _cleanup_stale_spark_temp_dirs(local_tmp_dir)
+
     builder = (
         SparkSession.builder.appName(spark_cfg["app_name"])
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
@@ -35,6 +61,7 @@ def get_spark(cfg: dict) -> SparkSession:
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .config("spark.driver.memory", spark_cfg["driver_memory"])
         .config("spark.sql.warehouse.dir", warehouse_dir)
+            fig("spark.local.dir", local_tmp_dir)
         .config("spark.ui.showConsoleProgress", "false")
         .config("spark.driver.extraJavaOptions", _JAVA17_ARROW_OPENS)
         .config("spark.executor.extraJavaOptions", _JAVA17_ARROW_OPENS)
