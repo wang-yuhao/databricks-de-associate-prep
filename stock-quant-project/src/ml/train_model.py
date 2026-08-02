@@ -116,7 +116,7 @@ def main():
     cfg = load_config()
     spark = get_spark(cfg)
 
-    mlflow.set_tracking_uri("file:./mlruns")
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("stock-direction-and-return-prediction")
 
     gold_root = resolve_path(cfg, "delta.gold_path")
