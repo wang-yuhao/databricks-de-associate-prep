@@ -1,0 +1,54 @@
+# Central configuration for the pipeline. Adjust table/column names under `postgres.tables`
+# to match your actual Postgres schema -- everything downstream reads from here, so you
+# should not need to touch any Python code just to point this at your real tables.
+
+symbols: ["AAPL", "NVDA", "TSLA", "AMD"]
+
+postgres:
+  host: localhost
+  port: 5432
+  database: alpaca_data
+  user: postgres
+  # password is read from POSTGRES_PASSWORD in .env -- do not put secrets in this file
+  tables:
+    bars:
+      name: bars               # table holding OHLCV bar data
+      symbol_col: symbol
+      timestamp_col: timestamp
+    quotes:
+      name: quotes              # table holding NBBO quote data
+      symbol_col: symbol
+      timestamp_col: timestamp
+    trades:
+      name: trades              # table holding individual trade ticks
+      symbol_col: symbol
+      timestamp_col: timestamp
+
+delta:
+  warehouse_path: "./data/lakehouse"
+  bronze_path: "./data/lakehouse/bronze"
+  silver_path: "./data/lakehouse/silver"
+  gold_path: "./data/lakehouse/gold"
+  quarantine_path: "./data/lakehouse/quarantine"
+  checkpoint_path: "./data/lakehouse/_checkpoints"
+  spark_warehouse_dir: "./data/spark-warehouse"   # backs the registered bronze/silver/gold databases
+
+spark:
+  app_name: "stock-quant-pipeline"
+  shuffle_partitions: 8
+  driver_memory: "4g"
+
+quality:
+  max_abs_return: 0.5          # flag single-bar moves bigger than +/-50% as suspicious
+  quarantine_rate_alert_pct: 5.0   # trigger a monitoring alert if >5% of a batch is quarantined
+
+ml:
+  prediction_horizon_days: 1
+  test_size_pct: 0.2            # last 20% of the timeline per symbol, held out (no shuffling -- time series)
+  random_state: 42
+
+backtest:
+  initial_capital: 100000
+  transaction_cost_bps: 5       # 5 basis points per trade, round trip charged twice
+  position_size_pct: 0.20       # fraction of capital risked per signal
+  min_confidence: 0.55          # only trade when model probability exceeds this
