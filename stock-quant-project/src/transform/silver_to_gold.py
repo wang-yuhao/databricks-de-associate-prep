@@ -12,6 +12,7 @@ Combines:
 import argparse
 
 from pyspark.sql import functions as F
+from pathlib import Path
 
 from src.ml.feature_engineering import add_technical_indicators
 from src.utils.config import load_config, resolve_path
@@ -77,7 +78,9 @@ def run(spark, cfg):
         .partitionBy("symbol")
         .save(gold_path)
     )
-    spark.sql(f"CREATE TABLE IF NOT EXISTS gold.features USING DELTA LOCATION '{gold_path}'")
+        gold_uri = Path(gold_path).resolve().as_uri()
+        spark.sql("CREATE SCHEMA IF NOT EXISTS gold")
+        spark.sql(f"CREATE TABLE IF NOT EXISTS gold.features USING DELTA LOCATION '{gold_uri}'")
 
     n = gold.count()
     print(f"[gold:features] wrote {n} rows, {len(gold.columns)} columns -> {gold_path}")
