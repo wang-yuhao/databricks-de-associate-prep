@@ -61,8 +61,8 @@ def get_spark(cfg: dict) -> SparkSession:
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .config("spark.driver.memory", spark_cfg["driver_memory"])
         .config("spark.sql.warehouse.dir", warehouse_dir)
-                .config("spark.local.dir", local_tmp_dir)
-            .config("spark.ui.showConsoleProgress", "false")
+        .config("spark.local.dir", local_tmp_dir)
+        .config("spark.ui.showConsoleProgress", "false")
         .config("spark.driver.extraJavaOptions", _JAVA17_ARROW_OPENS)
         .config("spark.executor.extraJavaOptions", _JAVA17_ARROW_OPENS)
         # Arrow-based toPandas()/applyInPandas() hit a well-known reflection
