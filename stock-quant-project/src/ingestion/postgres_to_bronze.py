@@ -52,10 +52,10 @@ def _write_bronze(spark, pdf, table_key, cfg, mode="append"):
         .option("mergeSchema", "true")
         .save(table_path)
     )
-        location_uri = Path(table_path).resolve().as_uri()
-        spark.sql("CREATE SCHEMA IF NOT EXISTS bronze")
-        spark.sql(f"CREATE TABLE IF NOT EXISTS bronze.{table_key} USING DELTA LOCATION '{location_uri}'")
-        n = sdf.count()
+    location_uri = Path(table_path).resolve().as_uri()
+    spark.sql("CREATE SCHEMA IF NOT EXISTS bronze")
+    spark.sql(f"CREATE TABLE IF NOT EXISTS bronze.{table_key} USING DELTA LOCATION '{location_uri}'")
+    n = sdf.count()
     print(f"[bronze:{table_key}] wrote {n} rows -> {table_path}")
     return n
 
