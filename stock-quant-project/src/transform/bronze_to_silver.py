@@ -60,12 +60,12 @@ def run(spark, cfg, table_key="bars"):
 
     # --- quarantine (append-only audit trail of rejected rows) ---
     if n_bad > 0:
-    bad.write.format("delta").mode("append").option("mergeSchema", "true").save(quarantine_path)
-    quarantine_uri = Path(quarantine_path).resolve().as_uri()
-    spark.sql("CREATE SCHEMA IF NOT EXISTS bronze")
-    spark.sql(
-        f"CREATE TABLE IF NOT EXISTS bronze.{table_key}_quarantine USING DELTA LOCATION '{quarantine_uri}'"
-    )
+        bad.write.format("delta").mode("append").option("mergeSchema", "true").save(quarantine_path)
+        quarantine_uri = Path(quarantine_path).resolve().as_uri()
+        spark.sql("CREATE SCHEMA IF NOT EXISTS bronze")
+        spark.sql(
+            f"CREATE TABLE IF NOT EXISTS bronze.{table_key}_quarantine USING DELTA LOCATION '{quarantine_uri}'"
+        )
 
     # --- upsert good rows into silver ---
     if not DeltaTable.isDeltaTable(spark, silver_path):
