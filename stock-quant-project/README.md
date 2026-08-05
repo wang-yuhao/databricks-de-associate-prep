@@ -183,3 +183,32 @@ Some natural next steps once the base pipeline is working on your real data:
   webhook instead of a print statement.
 - Try the same `add_table_comment` / `create_masked_gold_view` pattern against a real
   Unity Catalog table on Databricks Community Edition to see the native version.
+
+
+---
+
+## 8. Trading-bot integration notes (additive only)
+
+This project can share the same underlying Postgres data as the [`trading-bot`](https://github.com/wang-yuhao/trading-bot) repo. All integration work here follows one rule: **additive only** -- no existing trading-bot tables are dropped, renamed, or rewritten, and no historical data is re-fetched unless there's a genuine gap.
+
+What's been added so far, and why:
+
+- **`sql/001_additive_indexes.sql`** -- creates `timestamp` indexes on the existing per-symbol-year `*_quotes`/`*_trades`/`*_bars` tables (`CREATE INDEX IF NOT EXISTS`, safe to re-run) so incremental/watermark reads don't have to scan entire tables (some per-symbol quote tables are ~20GB). Also adds a small new `ingestion_watermark` control table for possible future use -- it is **not** required by the current ingestion code (see below).
+- **`scripts/startup_incremental_fetch.sh`** -- an idempotent script for WSL startup (wire it up via `crontab -e` with `@reboot`, or run manually after `docker-compose up -d postgres`). It calls the pipeline's existing `--mode incremental` flag (`postgres_to_bronze.py` already computes its own watermark as `max(timestamp)` currently in bronze per table) and then re-runs the MERGE-based `bronze_to_silver.py --all`.
+
+Why not a single unified view across both repos' data? A naive `UNION`/view-based consolidation was considered and rejected: several per-symbol quote tables are already tens of GB, so a blanket view would force expensive full scans on every read. The additive indexing + per-table incremental reads above get the performance benefit without touching existing structure or risking data loss.
+
+Recall commands after a long break (see `scripts/startup_incremental_fetch.sh` for the automated version):
+
+```bash
+# 1) bring the DB back up
+docker-compose up -d postgres
+docker ps                     # confirm the postgres container is healthy
+
+# 2) one-time additive index migration (safe to re-run)
+psql -h localhost -U <user> -d <db> -f sql/001_additive_indexes.sql
+
+# 3) incremental catch-up + promote to silver (what the startup script automates)
+python -m src.ingestion.postgres_to_bronze --mode incremental --table bars
+python -m src.transform.bronze_to_silver --all
+```
