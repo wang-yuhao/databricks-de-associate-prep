@@ -1,0 +1,50 @@
+{"event_id": "b-2-0", "device_id": "dev-020", "status": "PENDING", "amount": 376.44, "event_ts": "2026-10-02 15:09:00"}
+{"event_id": "b-2-1", "device_id": "dev-008", "status": "PENDING", "amount": 482.83, "event_ts": "2026-10-02 18:13:00"}
+{"event_id": "b-2-2", "device_id": "dev-019", "status": "ERROR", "amount": 231.38, "event_ts": "2026-10-02 12:33:00"}
+{"event_id": "b-2-3", "device_id": "dev-017", "status": "ERROR", "amount": 483.17, "event_ts": "2026-10-04 17:09:00"}
+{"event_id": "b-2-4", "device_id": "dev-009", "status": "ACTIVE", "amount": 320.95, "event_ts": "2026-10-05 04:43:00"}
+{"event_id": "b-2-5", "device_id": "dev-017", "status": "ACTIVE", "amount": 143.25, "event_ts": "2026-10-05 03:30:00"}
+{"event_id": "b-2-6", "device_id": "dev-017", "status": "UNKNOWN", "amount": 415.69, "event_ts": "2026-10-03 15:20:00"}
+{"event_id": "b-2-7", "device_id": "dev-001", "status": "ERROR", "amount": 27.58, "event_ts": "2026-10-04 11:55:00"}
+{"event_id": "b-2-8", "device_id": "dev-003", "status": "PENDING", "amount": 113.04, "event_ts": "2026-10-02 13:10:00"}
+{"event_id": "b-2-9", "device_id": "dev-011", "status": "INACTIVE", "amount": 69.66, "event_ts": "2026-10-01 22:11:00"}
+{"event_id": "b-2-10", "device_id": "dev-005", "status": "ERROR", "amount": 224.85, "event_ts": null}
+{"event_id": "b-2-11", "device_id": "dev-009", "status": "INACTIVE", "amount": 417.65, "event_ts": "2026-10-01 00:38:00"}
+{"event_id": "b-2-12", "device_id": "dev-014", "status": "ACTIVE", "amount": 388.31, "event_ts": "2026-10-05 18:00:00"}
+{"event_id": "b-2-13", "device_id": "dev-008", "status": "ERROR", "amount": 319.84, "event_ts": "2026-10-01 01:37:00"}
+{"event_id": "b-2-14", "device_id": "dev-016", "status": "ACTIVE", "amount": 316.35, "event_ts": "2026-10-01 03:47:00"}
+{"event_id": "b-2-15", "device_id": "dev-014", "status": "ACTIVE", "amount": 307.79, "event_ts": "2026-10-02 09:56:00"}
+{"event_id": "b-2-16", "device_id": "dev-003", "status": "PENDING", "amount": 34.77, "event_ts": "2026-10-04 06:23:00"}
+{"event_id": "b-2-17", "device_id": "dev-018", "status": "ACTIVE", "amount": 195.84, "event_ts": "2026-10-05 17:19:00"}
+{"event_id": "b-2-18", "device_id": "dev-009", "status": "ACTIVE", "amount": 179.19, "event_ts": null}
+{"event_id": "b-2-19", "device_id": "dev-004", "status": "PENDING", "amount": 67.57, "event_ts": "2026-10-02 22:25:00"}
+{"event_id": "b-2-20", "device_id": "dev-006", "status": "ERROR", "amount": 490.43, "event_ts": "2026-10-03 21:56:00"}
+{"event_id": "b-2-21", "device_id": "dev-003", "status": "ERROR", "amount": 19.45, "event_ts": "2026-10-02 04:36:00"}
+{"event_id": "b-2-22", "device_id": "dev-011", "status": "PENDING", "amount": 258.18, "event_ts": "2026-10-02 01:25:00"}
+{"event_id": "b-2-23", "device_id": "dev-009", "status": "ACTIVE", "amount": -376.89, "event_ts": "2026-10-05 16:09:00"}
+{"event_id": "b-2-24", "device_id": "dev-011", "status": "PENDING", "amount": 63.11, "event_ts": "2026-10-03 01:37:00"}
+{"event_id": "b-2-25", "device_id": "dev-013", "status": "PENDING", "amount": 486.89, "event_ts": "2026-10-04 15:00:00"}
+{"event_id": "b-2-26", "device_id": "dev-017", "status": "PENDING", "amount": 400.77, "event_ts": "2026-10-04 12:32:00"}
+{"event_id": "b-2-27", "device_id": "dev-020", "status": "INACTIVE", "amount": 273.19, "event_ts": "2026-10-01 14:41:00"}
+{"event_id": "b-2-28", "device_id": "dev-010", "status": "PENDING", "amount": 223.51, "event_ts": "2026-10-01 11:11:00"}
+{"event_id": "b-2-29", "device_id": "dev-015", "status": "PENDING", "amount": 224.12, "event_ts": "2026-10-02 23:32:00"}
+{"event_id": "b-2-30", "device_id": "dev-014", "status": "PENDING", "amount": 320.1, "event_ts": "2026-10-03 20:59:00"}
+{"event_id": "b-2-31", "device_id": "dev-013", "status": "PENDING", "amount": 257.03, "event_ts": "2026-10-01 02:33:00"}
+{"event_id": "b-2-32", "device_id": "dev-005", "status": "ERROR", "amount": 18.36, "event_ts": null}
+{"event_id": "b-2-33", "device_id": "dev-013", "status": "ACTIVE", "amount": 302.94, "event_ts": "2026-10-03 12:21:00"}
+{"event_id": "b-2-34", "device_id": "dev-015", "status": "ACTIVE", "amount": 287.39, "event_ts": "2026-10-03 12:41:00"}
+{"event_id": "b-2-35", "device_id": "dev-009", "status": "INACTIVE", "amount": 480.3, "event_ts": null}
+{"event_id": "b-2-36", "device_id": "dev-017", "status": "", "amount": 456.86, "event_ts": "2026-10-02 17:02:00"}
+{"event_id": "b-2-37", "device_id": "dev-020", "status": "PENDING", "amount": 347.3, "event_ts": "2026-10-04 07:19:00"}
+{"event_id": "b-2-38", "device_id": "dev-005", "status": "ACTIVE", "amount": 226.57, "event_ts": "2026-10-02 04:11:00"}
+{"event_id": "b-2-39", "device_id": "dev-011", "status": "PENDING", "amount": 355.06, "event_ts": "2026-10-04 02:59:00"}
+{"event_id": "b-2-40", "device_id": "dev-006", "status": "INACTIVE", "amount": 397.05, "event_ts": "2026-10-03 10:14:00"}
+{"event_id": "b-2-41", "device_id": "dev-005", "status": "INACTIVE", "amount": 395.4, "event_ts": null}
+{"event_id": "b-2-42", "device_id": "dev-012", "status": "ERROR", "amount": 402.03, "event_ts": "2026-10-05 19:32:00"}
+{"event_id": "b-2-43", "device_id": "dev-003", "status": "PENDING", "amount": 199.68, "event_ts": "2026-10-05 02:56:00"}
+{"event_id": "b-2-44", "device_id": "dev-014", "status": "ERROR", "amount": 411.85, "event_ts": null}
+{"event_id": "b-2-45", "device_id": "dev-003", "status": "ERROR", "amount": 233.45, "event_ts": "2026-10-03 21:55:00"}
+{"event_id": "b-2-46", "device_id": "dev-019", "status": "active!", "amount": 384.12, "event_ts": "2026-10-02 18:49:00"}
+{"event_id": "b-2-47", "device_id": "dev-017", "status": "INACTIVE", "amount": -152.76, "event_ts": "2026-10-01 04:14:00"}
+{"event_id": "b-2-48", "device_id": "dev-017", "status": "PENDING", "amount": 423.12, "event_ts": "2026-10-02 11:48:00"}
+{"event_id": "b-2-49", "device_id": "dev-005", "status": "active!", "amount": 307.6, "event_ts": "2026-10-05 09:22:00"}
