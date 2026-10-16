@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="429" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .src{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+      .cfg{fill:#52514e;fill-opacity:0.1;stroke:#52514e;stroke-width:1.5}
+      .dev{fill:#6250d6;fill-opacity:0.12;stroke:#6250d6;stroke-width:1.5}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">Bundle lifecycle: validate, deploy, run, destroy</text>
+
+  <text x="30" y="66" class="n">ON YOUR MACHINE (databricks bundle ...)</text>
+  <rect x="30" y="76" width="195" height="84" rx="8" class="src"/>
+  <text x="44" y="100" class="b">validate</text>
+  <text x="44" y="122" class="l">load files, resolve ${...},</text>
+  <text x="44" y="139" class="l">schema check. No changes</text>
+
+  <rect x="265" y="76" width="195" height="84" rx="8" class="src"/>
+  <text x="279" y="100" class="b">deploy</text>
+  <text x="279" y="122" class="l">upload files, create or</text>
+  <text x="279" y="139" class="l">update jobs, write state</text>
+
+  <rect x="500" y="76" width="195" height="84" rx="8" class="src"/>
+  <text x="514" y="100" class="b">run hello_job</text>
+  <text x="514" y="122" class="l">start the job, wait,</text>
+  <text x="514" y="139" class="l">print the run URL</text>
+
+  <rect x="735" y="76" width="195" height="84" rx="8" class="src"/>
+  <text x="749" y="100" class="b">destroy</text>
+  <text x="749" y="122" class="l">delete everything this</text>
+  <text x="749" y="139" class="l">bundle deployed</text>
+
+  <line x1="225" y1="118" x2="263" y2="118" class="ar"/>
+  <line x1="460" y1="118" x2="498" y2="118" class="ar"/>
+  <line x1="695" y1="118" x2="733" y2="118" class="ar"/>
+
+  <!-- workspace -->
+  <rect x="30" y="206" width="900" height="180" rx="8" class="dev"/>
+  <text x="44" y="372" class="b">Databricks workspace · target dev (mode: development)</text>
+
+  <rect x="50" y="222" width="250" height="88" rx="8" class="src"/>
+  <text x="64" y="244" class="b">files/</text>
+  <text x="64" y="264" class="l">databricks.yml, resources/,</text>
+  <text x="64" y="281" class="l">src/hello.py</text>
+
+  <rect x="320" y="222" width="250" height="88" rx="8" class="cfg"/>
+  <text x="334" y="244" class="b">state/</text>
+  <text x="334" y="264" class="l">which resources exist, their</text>
+  <text x="334" y="281" class="l">IDs: the base for the next diff</text>
+
+  <text x="50" y="334" class="n">both under /Workspace/Users/&lt;you&gt;/.bundle/simple_dab/dev/</text>
+
+  <rect x="640" y="222" width="270" height="108" rx="8" class="dev"/>
+  <text x="654" y="246" class="b">Job [dev &lt;you&gt;] hello_job</text>
+  <text x="654" y="268" class="l">visible in Jobs &amp; Pipelines,</text>
+  <text x="654" y="285" class="l">run history per run</text>
+  <text x="654" y="314" class="n">prefix added by development mode</text>
+
+  <line x1="330" y1="160" x2="185" y2="220" class="ar"/>
+  <line x1="362" y1="160" x2="430" y2="220" class="ar"/>
+  <line x1="400" y1="160" x2="680" y2="220" class="ar"/>
+  <line x1="597" y1="160" x2="760" y2="220" class="ar"/>
+  <line x1="832" y1="160" x2="860" y2="220" class="ar" stroke-dasharray="5 4"/>
+  <text x="852" y="190" class="n">removes</text>
+
+  <text x="30" y="412" class="n">deploy is idempotent: run it again after an edit and only the differences against state/ are applied.</text>
+</svg>

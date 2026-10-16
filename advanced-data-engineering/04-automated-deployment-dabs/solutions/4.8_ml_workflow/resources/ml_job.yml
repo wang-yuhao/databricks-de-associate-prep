@@ -1,0 +1,35 @@
+# SOLUTION - Lab 4.8: Adding ML to Engineering Workflows with DABs
+# Adds an ML step to the engineering workflow: train only after the daily summary is rebuilt.
+resources:
+  jobs:
+    orders_ml_job:
+      name: orders_ml_job
+      tasks:
+        - task_key: build_daily_summary
+          environment_key: default
+          python_wheel_task:
+            package_name: orders_lib
+            entry_point: daily_summary
+            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}"]
+
+        - task_key: train_revenue_model
+          depends_on:
+            - task_key: build_daily_summary
+          # Serverless: environment_key works for script, wheel and dbt tasks, not for notebook tasks.
+          environment_key: ml
+          spark_python_task:
+            python_file: ../src/ml/train_revenue_model.py
+            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}"]
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - ../dist/*.whl
+        - environment_key: ml
+          spec:
+            environment_version: "2"
+            dependencies:
+              - scikit-learn
+              - mlflow

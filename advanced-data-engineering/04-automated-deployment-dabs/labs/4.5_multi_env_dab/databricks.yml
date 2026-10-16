@@ -1,0 +1,42 @@
+# LAB 4.5 - Deploy a DAB to Multiple Environments
+# TODO 1: add a variable "alert_email" WITHOUT a default (every target must set it).
+# TODO 2: set alert_email in dev (your email) and stage (data-team@example.com).
+# TODO 3: add a "prod" target: production mode, root_path like stage, schema "orders",
+#         orders_per_run 1000, alert_email "oncall@example.com", and grant the group "users"
+#         CAN_VIEW on everything (top-level `permissions` inside the target).
+# Then open resources/orders_job.yml for TODO 4.
+bundle:
+  name: orders_etl_lab
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds the schema (Free Edition default is "workspace").
+    default: workspace
+  schema:
+    description: Schema for all tables of this environment.
+  landing_volume:
+    description: Volume (in the schema) where raw files land.
+    default: landing
+  orders_per_run:
+    description: How many sample orders the generator lands per run.
+    default: 500
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      schema: orders_dev
+      orders_per_run: 100
+
+  stage:
+    # Production mode: no name prefix, schedules active, pipelines must not be in development mode,
+    # and deploying as a person (not a service principal) is checked: shared root_path, run_as, permissions.
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: orders_stage

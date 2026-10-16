@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Lab target: CDC files merged into customers_bronze with CDF, streamed into customers_silver and clicks_silver, then purged">
+  <rect x="0.75" y="0.75" width="958.5" height="458.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+  </style>
+  <text x="24" y="36" class="t">What you will build in this lab</text>
+  <text x="24" y="58" class="n">Step numbers match the lab. One change feed keeps two downstream tables in sync; step 6 makes the deletes physical.</text>
+
+  <!-- snapshot path -->
+  <path d="M370,140 V96 H865 V118" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="618" y="88" class="n" text-anchor="middle">initial snapshot: VERSION AS OF 1 (before step 4)</text>
+
+  <!-- source -->
+  <rect x="30" y="150" width="160" height="64" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="44" y="174" class="h">CRM CDC files</text>
+  <text x="44" y="194" class="n">batch 1 (step 2)</text>
+  <text x="44" y="208" class="n">batch 2 (step 5)</text>
+  <path d="M190,182 H278" class="ln" marker-end="url(#arr)"/>
+  <text x="234" y="172" class="n" text-anchor="middle">MERGE</text>
+  <text x="234" y="200" class="n" text-anchor="middle">step 2</text>
+
+  <!-- bronze -->
+  <rect x="280" y="140" width="180" height="84" rx="8" fill="#eb6834" fill-opacity="0.12" stroke="#eb6834" stroke-width="1.5"/>
+  <text x="296" y="164" class="h">customers_bronze</text>
+  <text x="296" y="184" class="n">CDF enabled (step 1)</text>
+  <text x="296" y="202" class="n">v1 = initial 200 users</text>
+
+  <path d="M460,182 H568" class="ln" marker-end="url(#arr)"/>
+  <text x="515" y="172" class="n" text-anchor="middle">readChangeFeed</text>
+  <text x="515" y="200" class="n" text-anchor="middle">startingVersion 2</text>
+
+  <!-- engine -->
+  <rect x="570" y="140" width="170" height="84" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="586" y="164" class="h">upsert_batch()</text>
+  <text x="586" y="184" class="n">latest change per user_id,</text>
+  <text x="586" y="202" class="n">two MERGEs (step 4)</text>
+  <rect x="570" y="270" width="170" height="50" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="586" y="291" class="h">checkpoint</text>
+  <text x="586" y="309" class="n">step 5 resumes here</text>
+  <path d="M655,224 V268" class="ln" stroke-dasharray="5 4" marker-start="url(#arr)" marker-end="url(#arr)"/>
+
+  <!-- silver -->
+  <rect x="790" y="120" width="150" height="64" rx="8" fill="#6250d6" fill-opacity="0.12" stroke="#6250d6" stroke-width="1.5"/>
+  <text x="804" y="144" class="h">customers_silver</text>
+  <text x="804" y="164" class="n">email → domain only;</text>
+  <text x="804" y="178" class="n">upsert or delete</text>
+  <rect x="790" y="210" width="150" height="64" rx="8" fill="#6250d6" fill-opacity="0.12" stroke="#6250d6" stroke-width="1.5"/>
+  <text x="804" y="234" class="h">clicks_silver</text>
+  <text x="804" y="254" class="n">drop clicks of</text>
+  <text x="804" y="268" class="n">deleted users</text>
+  <path d="M740,168 L788,156" class="ln" marker-end="url(#arr)"/>
+  <path d="M740,198 L788,234" class="ln" marker-end="url(#arr)"/>
+
+  <!-- purge -->
+  <path d="M370,224 V292" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <rect x="280" y="294" width="180" height="64" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="296" y="318" class="h">Step 6: purge</text>
+  <text x="296" y="338" class="n">REORG … PURGE + VACUUM</text>
+  <text x="296" y="352" class="n">on Bronze and both Silver</text>
+
+  <text x="30" y="394" class="n">The checks pass when Silver holds exactly the Bronze user_ids, no click belongs to a deleted user, and old versions can no longer be read.</text>
+
+  <g transform="translate(30,414)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+    <text x="22" y="12" class="n">source</text>
+    <rect x="90" y="0" width="14" height="14" rx="3" fill="#eb6834" fill-opacity="0.12" stroke="#eb6834" stroke-width="1.5"/>
+    <text x="112" y="12" class="n">Bronze</text>
+    <rect x="180" y="0" width="14" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+    <text x="202" y="12" class="n">processing</text>
+    <rect x="290" y="0" width="14" height="14" rx="3" fill="#6250d6" fill-opacity="0.12" stroke="#6250d6" stroke-width="1.5"/>
+    <text x="312" y="12" class="n">Silver</text>
+    <rect x="370" y="0" width="14" height="14" rx="3" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+    <text x="392" y="12" class="n">checkpoint</text>
+    <rect x="480" y="0" width="14" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+    <text x="502" y="12" class="n">physical delete</text>
+    <line x1="610" y1="7" x2="646" y2="7" class="ln" stroke-dasharray="5 4"/>
+    <text x="654" y="12" class="n">one-off or maintenance path</text>
+  </g>
+</svg>

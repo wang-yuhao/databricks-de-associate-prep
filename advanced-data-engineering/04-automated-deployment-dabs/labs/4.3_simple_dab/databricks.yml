@@ -1,0 +1,12 @@
+# LAB 4.3 - Deploying a Simple DAB
+# TODO 1: name the bundle "my_first_bundle"
+bundle:
+  name: TODO
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true

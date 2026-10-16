@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="SCD type 2 timeline by sequence_num: a late Incheon event is spliced into customer 2's history and a delete closes customer 3's last version">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .late{fill:#6250d6;fill-opacity:.24;stroke:#6250d6;stroke-width:2.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .grid{stroke:#e4e2dc;stroke-width:1;stroke-dasharray:3 4}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="420" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">SCD type 2 history, ordered by sequence_num (not by arrival)</text>
+
+  <!-- grid lines at seq 1..4 -->
+  <line class="grid" x1="230" y1="62" x2="230" y2="330"/>
+  <line class="grid" x1="390" y1="62" x2="390" y2="330"/>
+  <line class="grid" x1="550" y1="62" x2="550" y2="330"/>
+  <line class="grid" x1="710" y1="62" x2="710" y2="330"/>
+
+  <!-- lane 1: customer 2 after batch 1 -->
+  <text class="b" x="24" y="88">Customer 2</text>
+  <text class="n" x="24" y="105">after batch 1</text>
+  <rect class="slv" x="230" y="74" width="480" height="34" rx="6"/>
+  <text class="l" x="244" y="96">Seoul</text>
+  <rect class="slv" x="710" y="74" width="200" height="34" rx="6"/>
+  <text class="l" x="724" y="96">Busan</text>
+  <path class="a" d="M910,91 H936"/>
+  <text class="n" x="244" y="126">seq 2 changed only email: this row was updated in place (email is not tracked)</text>
+
+  <!-- lane 2: customer 2 after batch 2 -->
+  <text class="b" x="24" y="168">Customer 2</text>
+  <text class="n" x="24" y="185">after batch 2</text>
+  <rect class="slv" x="230" y="154" width="320" height="34" rx="6"/>
+  <text class="l" x="244" y="176">Seoul</text>
+  <rect class="late" x="550" y="154" width="160" height="34" rx="6"/>
+  <text class="b" x="564" y="176">Incheon</text>
+  <rect class="slv" x="710" y="154" width="200" height="34" rx="6"/>
+  <text class="l" x="724" y="176">Busan</text>
+  <path class="a" d="M910,171 H936"/>
+  <text class="n" x="550" y="206">late seq 3 spliced in; Seoul now ends at 3</text>
+
+  <!-- lane 3: customer 3 after batch 2 -->
+  <text class="b" x="24" y="258">Customer 3</text>
+  <text class="n" x="24" y="275">after batch 2</text>
+  <rect class="slv" x="230" y="244" width="160" height="34" rx="6"/>
+  <text class="l" x="244" y="266">Osaka</text>
+  <rect class="late" x="390" y="244" width="160" height="34" rx="6"/>
+  <text class="b" x="404" y="266">Kyoto</text>
+  <line x1="550" y1="236" x2="550" y2="286" stroke="#e34948" stroke-width="2.5"/>
+  <rect class="bad" x="566" y="244" width="190" height="34" rx="6"/>
+  <text class="l" x="578" y="266">DELETE at seq 3: no open row</text>
+  <text class="n" x="390" y="296">late seq 2 placed before the delete</text>
+
+  <!-- axis -->
+  <path class="a" d="M230,330 H936"/>
+  <text class="n m" x="230" y="350">seq 1</text>
+  <text class="n m" x="390" y="350">seq 2</text>
+  <text class="n m" x="550" y="350">seq 3</text>
+  <text class="n m" x="710" y="350">seq 4</text>
+  <text class="n" x="836" y="350">sequence_num</text>
+
+  <rect class="late" x="24" y="378" width="18" height="16" rx="3"/><text class="n" x="50" y="390">version created by a late event</text>
+  <path class="a" d="M260,386 H290"/><text class="n" x="298" y="390">open version (__END_AT is NULL)</text>
+  <text class="n" x="530" y="390">A version is valid for __START_AT &lt;= t &lt; __END_AT.</text>
+</svg>

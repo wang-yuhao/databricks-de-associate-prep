@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Rules loaded from the dq_rules table flag every order with is_quarantined, the flagged table splits into orders_valid and orders_quarantine, and dq_reconciliation checks that no row was lost">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .src{fill:#2a78d6;fill-opacity:.12;stroke:#2a78d6;stroke-width:1.5}
+    .brz{fill:#eb6834;fill-opacity:.12;stroke:#eb6834;stroke-width:1.5}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .gld{fill:#eda100;fill-opacity:.14;stroke:#eda100;stroke-width:1.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .meta{fill:#52514e;fill-opacity:.08;stroke:#52514e;stroke-width:1.5}
+    .dash{stroke-dasharray:5 4}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+    .d{fill:none;stroke:#52514e;stroke-width:1.5;stroke-dasharray:4 4;marker-end:url(#ah)}
+    .op{font-size:16px;font-weight:600;fill:#52514e;text-anchor:middle}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="540" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Rules as data, zero-loss quarantine, and a table-level reconciliation check</text>
+
+  <!-- sources -->
+  <rect class="src" x="24" y="196" width="122" height="58" rx="8"/>
+  <text class="b m" x="85" y="221">orders_us/</text>
+  <text class="n m" x="85" y="240">JSON files</text>
+  <rect class="src" x="24" y="340" width="122" height="58" rx="8"/>
+  <text class="b m" x="85" y="365">products/</text>
+  <text class="n m" x="85" y="384">CSV file</text>
+
+  <!-- bronze -->
+  <rect class="brz" x="176" y="190" width="150" height="70" rx="8"/>
+  <text class="b m" x="251" y="216">orders_bronze</text>
+  <text class="n m" x="251" y="235">warn: no_rescued_data</text>
+  <text class="n m" x="251" y="251">Auto Loader, rescue mode</text>
+  <rect class="brz" x="176" y="340" width="150" height="58" rx="8"/>
+  <text class="b m" x="251" y="365">products</text>
+  <text class="n m" x="251" y="384">materialized view</text>
+  <path class="a" d="M146,225 H174"/>
+  <path class="a" d="M146,369 H174"/>
+
+  <!-- rules table -->
+  <rect class="meta" x="358" y="70" width="166" height="60" rx="8"/>
+  <text class="b m" x="441" y="95">dq_rules (Delta table)</text>
+  <text class="n m" x="441" y="114">get_rules("orders")</text>
+  <path class="d" d="M441,130 H441 V176"/>
+  <text class="n" x="432" y="158" text-anchor="end">loaded at pipeline start</text>
+
+  <!-- flagged -->
+  <rect class="slv" x="358" y="178" width="166" height="96" rx="8"/>
+  <text class="b m" x="441" y="203">orders_dq_flagged</text>
+  <text class="n m" x="441" y="222">expect_all(rules): warn</text>
+  <text class="n m" x="441" y="242">is_quarantined =</text>
+  <text class="n m" x="441" y="259">NOT (all rules)</text>
+  <path class="a" d="M326,225 H356"/>
+
+  <!-- split -->
+  <rect class="slv dash" x="556" y="130" width="160" height="58" rx="8"/>
+  <text class="b m" x="636" y="155">orders_valid</text>
+  <text class="n m" x="636" y="174">temp view: NOT flagged</text>
+  <rect class="bad" x="556" y="262" width="160" height="64" rx="8"/>
+  <text class="b m" x="636" y="288">orders_quarantine</text>
+  <text class="n m" x="636" y="307">flagged + failed_rules</text>
+  <path class="a" d="M524,206 H538 V159 H554"/>
+  <path class="a" d="M524,248 H538 V294 H554"/>
+
+  <!-- silver + gold -->
+  <rect class="slv" x="748" y="124" width="188" height="70" rx="8"/>
+  <text class="b m" x="842" y="149">orders_silver</text>
+  <text class="n m" x="842" y="167">join products (stream-static)</text>
+  <text class="n m" x="842" y="184">drop: known_product</text>
+  <path class="a" d="M716,159 H746"/>
+  <path class="a" d="M326,369 H732 V180 H746"/>
+
+  <rect class="gld" x="748" y="262" width="188" height="64" rx="8"/>
+  <text class="b m" x="842" y="288">daily_category_sales</text>
+  <text class="n m" x="842" y="307">fail: non_negative_revenue</text>
+  <path class="a" d="M842,194 V260"/>
+
+  <!-- reconciliation band -->
+  <rect class="gld" x="24" y="428" width="912" height="80" rx="8"/>
+  <text class="b" x="40" y="452">dq_reconciliation</text>
+  <text class="n" x="168" y="452">materialized view with aggregate expectations: proves no row was lost between layers</text>
+  <rect class="brz" x="40" y="466" width="140" height="30" rx="6"/><text class="l m" x="110" y="486">bronze_rows</text>
+  <text class="op" x="206" y="487">=</text>
+  <rect class="slv" x="232" y="466" width="140" height="30" rx="6"/><text class="l m" x="302" y="486">flagged_rows</text>
+  <text class="op" x="398" y="487">=</text>
+  <rect class="slv dash" x="424" y="466" width="140" height="30" rx="6"/><text class="l m" x="494" y="486">valid_rows</text>
+  <text class="op" x="590" y="487">+</text>
+  <rect class="bad" x="616" y="466" width="160" height="30" rx="6"/><text class="l m" x="696" y="486">quarantined_rows</text>
+  <text class="n" x="792" y="479">bronze_fully_flagged,</text>
+  <text class="n" x="792" y="494">flagged_split_complete</text>
+
+  <text class="n" x="24" y="528">Dashed box: temporary view (not stored). Every row from orders_bronze ends up in exactly one of orders_valid or orders_quarantine.</text>
+</svg>

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Privacy spectrum from identifiable to pseudonymized to anonymized data, with reversibility and GDPR scope">
+  <rect x="0.75" y="0.75" width="958.5" height="438.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+  </style>
+  <text x="24" y="36" class="t">From identifiable to anonymous</text>
+  <text x="24" y="58" class="n">Each step lowers re-identification risk. Only the last one takes the data out of GDPR scope.</text>
+
+  <rect x="40" y="86" width="260" height="158" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="56" y="112" class="h">Identifiable</text>
+  <text x="56" y="132" class="n">raw PII, restricted Bronze only</text>
+  <text x="56" y="166" class="l">email  ana@mail.com</text>
+  <text x="56" y="186" class="l">zip 10115 · born 1988-03-02</text>
+  <text x="56" y="222" class="n">Who: a few pipeline principals</text>
+
+  <rect x="350" y="86" width="260" height="158" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="366" y="112" class="h">Pseudonymized</text>
+  <text x="366" y="132" class="n">salted hash · tokenization · masking</text>
+  <text x="366" y="166" class="l">user_key  9f2c…a71</text>
+  <text x="366" y="186" class="l">zip 10115 · born 1988-03-02</text>
+  <text x="366" y="222" class="n">Re-identifiable with the salt or vault</text>
+
+  <rect x="660" y="86" width="260" height="158" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="676" y="112" class="h">Anonymized</text>
+  <text x="676" y="132" class="n">generalize · suppress · noise · aggregate</text>
+  <text x="676" y="166" class="l">(no identifier)</text>
+  <text x="676" y="186" class="l">region EU · age 30-39</text>
+  <text x="676" y="222" class="n">No way back, if k-anonymity holds</text>
+
+  <path d="M300,165 H348" class="ln" marker-end="url(#arr)"/>
+  <path d="M610,165 H658" class="ln" marker-end="url(#arr)"/>
+
+  <!-- reversibility axis -->
+  <text x="40" y="290" class="h">Reversible?</text>
+  <path d="M160,286 H918" class="ln" marker-end="url(#arr)"/>
+  <text x="170" y="306" class="n">trivially (it is the data)</text>
+  <text x="366" y="306" class="n">only with a secret (key, salt, vault)</text>
+  <text x="676" y="306" class="n">not at all</text>
+
+  <!-- GDPR scope -->
+  <text x="40" y="348" class="h">GDPR</text>
+  <path d="M40,362 V372 H610 V362" class="ln"/>
+  <text x="325" y="392" class="n" text-anchor="middle">personal data: rights of access and erasure apply (pseudonymized data too)</text>
+  <path d="M660,362 V372 H920 V362" class="ln" stroke-dasharray="5 4"/>
+  <text x="790" y="392" class="n" text-anchor="middle">out of scope, if re-identification is impossible</text>
+
+  <rect x="40" y="414" width="12" height="12" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="58" y="425" class="n">restricted</text>
+  <rect x="140" y="414" width="12" height="12" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="158" y="425" class="n">privacy technique applied</text>
+</svg>

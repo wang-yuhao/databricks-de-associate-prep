@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="419" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .ard{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a);stroke-dasharray:5 4}
+    </style>
+  </defs>
+  <text x="28" y="36" class="t">Over-partitioning: one directory per value, a file per task in each</text>
+  <rect x="380" y="60" width="200" height="46" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="480.0" y="87.5" class="l" text-anchor="middle">tx_over_partitioned/</text>
+  <rect x="24" y="160" width="160" height="40" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="104.0" y="184.5" class="l" text-anchor="middle">store_id=0/</text>
+  <path d="M480,106 L104,158" class="ar"/>
+  <rect x="42" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="74" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="106" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="138" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="104" y="278" class="n" text-anchor="middle">8 files · ~2 KB each</text>
+  <rect x="194" y="160" width="160" height="40" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="274.0" y="184.5" class="l" text-anchor="middle">store_id=1/</text>
+  <path d="M480,106 L274,158" class="ar"/>
+  <rect x="212" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="244" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="276" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="308" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="274" y="278" class="n" text-anchor="middle">8 files · ~2 KB each</text>
+  <rect x="364" y="160" width="160" height="40" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="444.0" y="184.5" class="l" text-anchor="middle">store_id=2/</text>
+  <path d="M480,106 L444,158" class="ar"/>
+  <rect x="382" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="414" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="446" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="478" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="444" y="278" class="n" text-anchor="middle">8 files · ~2 KB each</text>
+  <rect x="534" y="160" width="160" height="40" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="614.0" y="184.5" class="l" text-anchor="middle">store_id=3/</text>
+  <path d="M480,106 L614,158" class="ar"/>
+  <rect x="552" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="584" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="616" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="648" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="614" y="278" class="n" text-anchor="middle">8 files · ~2 KB each</text>
+  <rect x="776" y="160" width="160" height="40" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="856.0" y="184.5" class="l" text-anchor="middle">store_id=199/</text>
+  <path d="M480,106 L856,158" class="ar"/>
+  <rect x="794" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="826" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="858" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <rect x="890" y="222" width="26" height="34" rx="3" fill="#2a78d6" fill-opacity="0.2" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="856" y="278" class="n" text-anchor="middle">8 files · ~2 KB each</text>
+  <text x="737" y="186" class="b" text-anchor="middle">…</text>
+  <rect x="24" y="306" width="912" height="70" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="480.0" y="327.5" class="b" text-anchor="middle">File explosion</text>
+  <text x="480.0" y="346.5" class="l" text-anchor="middle">8 write tasks × 200 store_id values → up to 1,600 files of a few KB for a table of a few MB.</text>
+  <text x="480.0" y="363.5" class="l" text-anchor="middle">PARTITIONED BY customer_id (50,000 values) would create 50,000 directories.</text>
+  <text x="24" y="404" class="n">Rule: partition only by low-cardinality columns that almost every query filters on, with ≥ 1 GB per partition.</text>
+</svg>

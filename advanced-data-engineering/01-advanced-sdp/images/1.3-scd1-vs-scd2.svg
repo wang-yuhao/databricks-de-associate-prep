@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 450" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="One CDC feed with out-of-order events applied by AUTO CDC to an SCD type 1 table with current state and an SCD type 2 table with versioned history">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .src{fill:#2a78d6;fill-opacity:.08;stroke:#2a78d6;stroke-width:1.5}
+    .slv{fill:#6250d6;fill-opacity:.08;stroke:#6250d6;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .del{fill:none;stroke:#e34948;stroke-width:1.5}
+    .hl{fill:#52514e;fill-opacity:.10}
+    .sep{stroke:#2a78d6;stroke-opacity:.35;stroke-width:1}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="450" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">One CDC feed, two targets: SCD type 1 vs SCD type 2</text>
+
+  <!-- CDC events -->
+  <rect class="src" x="24" y="60" width="318" height="330" rx="8"/>
+  <text class="b" x="40" y="86">CDC events, in arrival order</text>
+  <text class="n" x="40" y="112">batch</text><text class="n" x="96" y="112">id</text><text class="n" x="128" y="112">seq</text><text class="n" x="166" y="112">operation</text><text class="n" x="246" y="112">city</text>
+
+  <text class="l" x="40" y="140">0</text><text class="l" x="96" y="140">2</text><text class="l" x="128" y="140">1</text><text class="l" x="166" y="140">INSERT</text><text class="l" x="246" y="140">Seoul</text>
+  <text class="l" x="40" y="166">0</text><text class="l" x="96" y="166">3</text><text class="l" x="128" y="166">1</text><text class="l" x="166" y="166">INSERT</text><text class="l" x="246" y="166">Osaka</text>
+  <line class="sep" x1="36" y1="178" x2="330" y2="178"/>
+  <text class="l" x="40" y="198">1</text><text class="l" x="96" y="198">2</text><text class="l" x="128" y="198">2</text><text class="l" x="166" y="198">UPDATE</text><text class="l" x="246" y="198">Seoul</text>
+  <text class="n" x="246" y="213">email only</text>
+  <text class="l" x="40" y="236">1</text><text class="l" x="96" y="236">2</text><text class="l" x="128" y="236">4</text><text class="l" x="166" y="236">UPDATE</text><text class="l" x="246" y="236">Busan</text>
+  <rect class="del" x="160" y="248" width="60" height="22" rx="4"/>
+  <text class="l" x="40" y="264">1</text><text class="l" x="96" y="264">3</text><text class="l" x="128" y="264">3</text><text class="l" x="166" y="264">DELETE</text><text class="l" x="246" y="264">-</text>
+  <line class="sep" x1="36" y1="280" x2="330" y2="280"/>
+  <rect class="hl" x="34" y="286" width="298" height="52" rx="4"/>
+  <text class="l" x="40" y="306">2</text><text class="l" x="96" y="306">2</text><text class="l" x="128" y="306">3</text><text class="l" x="166" y="306">UPDATE</text><text class="l" x="246" y="306">Incheon</text>
+  <text class="l" x="40" y="330">2</text><text class="l" x="96" y="330">3</text><text class="l" x="128" y="330">2</text><text class="l" x="166" y="330">UPDATE</text><text class="l" x="246" y="330">Kyoto</text>
+  <text class="n" x="40" y="360">Shaded: late events. Their seq is lower than</text>
+  <text class="n" x="40" y="377">a change that was already applied.</text>
+
+  <!-- AUTO CDC -->
+  <rect class="flw" x="362" y="166" width="180" height="112" rx="8"/>
+  <text class="b m" x="452" y="192">AUTO CDC</text>
+  <text class="n m" x="452" y="213">keys: customer_id</text>
+  <text class="n m" x="452" y="231">sequence_by: sequence_num</text>
+  <text class="n m" x="452" y="249">apply_as_deletes:</text>
+  <text class="n m" x="452" y="265">operation = 'DELETE'</text>
+  <path class="a" d="M342,222 H360"/>
+  <path class="a" d="M542,200 H552 V118 H564"/>
+  <path class="a" d="M542,246 H552 V300 H564"/>
+
+  <!-- SCD1 -->
+  <rect class="slv" x="566" y="60" width="370" height="124" rx="8"/>
+  <text class="b" x="582" y="84">customers_scd1 (type 1: current state)</text>
+  <text class="n" x="582" y="108">customer_id</text><text class="n" x="680" y="108">name</text><text class="n" x="780" y="108">city</text>
+  <text class="l" x="582" y="130">2</text><text class="l" x="680" y="130">Ben Kim</text><text class="l" x="780" y="130">Busan</text>
+  <text class="n" x="582" y="156">Late Incheon (seq 3 &lt; 4) is ignored.</text>
+  <text class="n" x="582" y="173">Customer 3 is deleted; its tombstone blocks the late seq 2.</text>
+
+  <!-- SCD2 -->
+  <rect class="slv" x="566" y="204" width="370" height="186" rx="8"/>
+  <text class="b" x="582" y="228">customers_scd2 (type 2: history)</text>
+  <text class="n" x="582" y="252">customer_id</text><text class="n" x="680" y="252">city</text><text class="n" x="752" y="252">__START_AT</text><text class="n" x="836" y="252">__END_AT</text>
+  <text class="l" x="582" y="276">2</text><text class="l" x="680" y="276">Seoul</text><text class="l" x="752" y="276">1</text><text class="l" x="836" y="276">3</text>
+  <rect class="hl" x="576" y="284" width="350" height="22" rx="4"/>
+  <text class="l" x="582" y="300">2</text><text class="l" x="680" y="300">Incheon</text><text class="l" x="752" y="300">3</text><text class="l" x="836" y="300">4</text>
+  <text class="l" x="582" y="324">2</text><text class="l" x="680" y="324">Busan</text><text class="l" x="752" y="324">4</text><text class="l" x="836" y="324">NULL (open)</text>
+  <text class="l" x="582" y="348">3</text><text class="l" x="680" y="348">Osaka</text><text class="l" x="752" y="348">1</text><text class="l" x="836" y="348">2</text>
+  <rect class="hl" x="576" y="356" width="350" height="22" rx="4"/>
+  <text class="l" x="582" y="372">3</text><text class="l" x="680" y="372">Kyoto</text><text class="l" x="752" y="372">2</text><text class="l" x="836" y="372">3</text>
+
+  <rect class="del" x="24" y="412" width="18" height="16" rx="3"/><text class="n" x="50" y="424">delete event</text>
+  <rect class="hl" x="150" y="412" width="18" height="16" rx="3"/><text class="n" x="176" y="424">late event, or the version it created in sequence order</text>
+  <text class="n" x="566" y="424">Customer 3 has no open version: deleted at seq 3.</text>
+</svg>

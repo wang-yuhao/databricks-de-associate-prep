@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="559" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .ard{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a);stroke-dasharray:5 4}
+    </style>
+  </defs>
+  <text x="28" y="36" class="t">Skew: one hot partition = one long task (and how AQE splits it)</text>
+  <text x="24" y="70" class="b">AQE skew join off: partition with customer_id 0 holds 30% of the rows</text>
+  <text x="180" y="99" class="n" text-anchor="end">task 1</text>
+  <rect x="190.0" y="86" width="77.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="125" class="n" text-anchor="end">task 2</text>
+  <rect x="190.0" y="112" width="91.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="151" class="n" text-anchor="end">task 3 (key 0)</text>
+  <rect x="190.0" y="138" width="672.0" height="17" rx="3" fill="#e34948" fill-opacity="0.35" stroke="#e34948" stroke-width="1.5"/>
+  <text x="180" y="177" class="n" text-anchor="end">task 4</text>
+  <rect x="190.0" y="164" width="84.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="203" class="n" text-anchor="end">task 5</text>
+  <rect x="190.0" y="190" width="70.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <line x1="190" y1="222" x2="890.0" y2="222" stroke="#c8c6bf" stroke-width="1"/>
+  <text x="190" y="240" class="n">time →</text>
+  <text x="295.0" y="194" class="n">the stage ends only when the slowest task ends: max task time ≫ median</text>
+  <text x="24" y="296" class="b">AQE skew join on: the hot partition is split, the other side's matching rows are copied</text>
+  <text x="180" y="325" class="n" text-anchor="end">task 1</text>
+  <rect x="190.0" y="312" width="77.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="349" class="n" text-anchor="end">task 2</text>
+  <rect x="190.0" y="336" width="91.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="373" class="n" text-anchor="end">task 4</text>
+  <rect x="190.0" y="360" width="84.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="397" class="n" text-anchor="end">task 5</text>
+  <rect x="190.0" y="384" width="70.0" height="17" rx="3" fill="#1baf7a" fill-opacity="0.35" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="180" y="421" class="n" text-anchor="end">key 0 · split 1/4</text>
+  <rect x="190.0" y="408" width="168.0" height="17" rx="3" fill="#eda100" fill-opacity="0.35" stroke="#eda100" stroke-width="1.5"/>
+  <text x="180" y="445" class="n" text-anchor="end">key 0 · split 2/4</text>
+  <rect x="190.0" y="432" width="168.0" height="17" rx="3" fill="#eda100" fill-opacity="0.35" stroke="#eda100" stroke-width="1.5"/>
+  <text x="180" y="469" class="n" text-anchor="end">key 0 · split 3/4</text>
+  <rect x="190.0" y="456" width="168.0" height="17" rx="3" fill="#eda100" fill-opacity="0.35" stroke="#eda100" stroke-width="1.5"/>
+  <text x="180" y="493" class="n" text-anchor="end">key 0 · split 4/4</text>
+  <rect x="190.0" y="480" width="168.0" height="17" rx="3" fill="#eda100" fill-opacity="0.35" stroke="#eda100" stroke-width="1.5"/>
+  <line x1="190" y1="510" x2="890.0" y2="510" stroke="#c8c6bf" stroke-width="1"/>
+  <text x="190" y="528" class="n">time →</text>
+  <text x="372.0" y="420" class="n">4 parallel sub-tasks, each joins a quarter of the hot</text>
+  <text x="372.0" y="437" class="n">partition with a copy of its matching address rows</text>
+  <text x="372.0" y="454" class="n">(join plan shows skew=true)</text>
+  <rect x="560" y="537" width="16" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="582" y="548" class="n">normal task</text>
+  <rect x="678.6" y="537" width="16" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="700.6" y="548" class="n">skewed task</text>
+  <rect x="797.2" y="537" width="16" height="14" rx="3" fill="#eda100" fill-opacity="0.12" stroke="#eda100" stroke-width="1.5"/>
+  <text x="819.2" y="548" class="n">split sub-task</text>
+</svg>

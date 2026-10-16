@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="339" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .src{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+      .ci{fill:#1baf7a;fill-opacity:0.12;stroke:#1baf7a;stroke-width:1.5}
+      .dev{fill:#6250d6;fill-opacity:0.12;stroke:#6250d6;stroke-width:1.5}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">Local development loop with VS Code and Databricks</text>
+
+  <text x="30" y="70" class="n">ON YOUR MACHINE</text>
+  <text x="480" y="70" class="n">IN THE WORKSPACE</text>
+  <text x="795" y="70" class="n">CI SYSTEM</text>
+
+  <rect x="30" y="80" width="135" height="110" rx="8" class="src"/>
+  <text x="44" y="104" class="b">1 · Edit</text>
+  <text x="44" y="126" class="l">functions in src/,</text>
+  <text x="44" y="143" class="l">YAML with schema</text>
+  <text x="44" y="160" class="l">autocompletion</text>
+
+  <rect x="183" y="80" width="135" height="110" rx="8" class="src"/>
+  <text x="197" y="104" class="b">2 · Unit test</text>
+  <text x="197" y="126" class="l">pytest on local</text>
+  <text x="197" y="143" class="l">Spark, small</text>
+  <text x="197" y="160" class="l">DataFrames</text>
+
+  <rect x="336" y="80" width="135" height="110" rx="8" class="src"/>
+  <text x="350" y="104" class="b">3 · Debug</text>
+  <text x="350" y="126" class="l">Databricks Connect</text>
+  <text x="350" y="143" class="l">breakpoints local,</text>
+  <text x="350" y="160" class="l">spark runs remote</text>
+
+  <rect x="489" y="80" width="135" height="110" rx="8" class="dev"/>
+  <text x="503" y="104" class="b">4 · Deploy dev</text>
+  <text x="503" y="126" class="l">Bundle Resource</text>
+  <text x="503" y="143" class="l">Explorer → Deploy,</text>
+  <text x="503" y="160" class="l">then Run the job</text>
+
+  <rect x="642" y="80" width="135" height="110" rx="8" class="src"/>
+  <text x="656" y="104" class="b">5 · Push</text>
+  <text x="656" y="126" class="l">commit, open a PR</text>
+
+  <rect x="795" y="80" width="135" height="110" rx="8" class="ci"/>
+  <text x="809" y="104" class="b">6 · CI/CD</text>
+  <text x="809" y="126" class="l">test, validate,</text>
+  <text x="809" y="143" class="l">deploy stage, then</text>
+  <text x="809" y="160" class="l">prod (lesson 4.7)</text>
+
+  <line x1="165" y1="135" x2="181" y2="135" class="ar"/>
+  <line x1="318" y1="135" x2="334" y2="135" class="ar"/>
+  <line x1="471" y1="135" x2="487" y2="135" class="ar"/>
+  <line x1="624" y1="135" x2="640" y2="135" class="ar"/>
+  <line x1="777" y1="135" x2="793" y2="135" class="ar"/>
+
+  <path d="M556,190 V236 H97 V192" class="ar" stroke-dasharray="5 4"/>
+  <text x="326" y="256" class="n" text-anchor="middle">iterate until the dev run is right; Sync can push src/ edits continuously</text>
+
+  <text x="30" y="296" class="n">Blue = your machine · purple = your dev target (mode: development) · green = CI system.</text>
+  <text x="30" y="314" class="n">Steps 1-4 never touch stage or prod; only CI deploys there.</text>
+</svg>

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Where a deleted person's data can still be read after DELETE, after REORG PURGE and after VACUUM">
+  <rect x="0.75" y="0.75" width="958.5" height="478.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+    .p{fill:#e34948;fill-opacity:0.12;stroke:#e34948;stroke-width:1.5}
+    .g{fill:#52514e;fill-opacity:0.06;stroke:#52514e;stroke-width:1.5}
+  </style>
+  <text x="24" y="36" class="t">When is a deleted row really gone?</text>
+  <text x="24" y="58" class="n">Each column is the state after the command on top. Red cells: the person's data can still be read.</text>
+
+  <!-- stage headers -->
+  <rect x="270" y="80" width="200" height="64" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="286" y="104" class="h">1. DELETE / MERGE</text>
+  <text x="286" y="124" class="n">new version; a deletion</text>
+  <text x="286" y="138" class="n">vector marks the rows</text>
+  <rect x="500" y="80" width="200" height="64" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="516" y="104" class="h">2. REORG … PURGE</text>
+  <text x="516" y="124" class="n">rewrites files without</text>
+  <text x="516" y="138" class="n">the deleted rows</text>
+  <rect x="730" y="80" width="200" height="64" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="746" y="104" class="h">3. VACUUM</text>
+  <text x="746" y="124" class="n">deletes files older than</text>
+  <text x="746" y="138" class="n">the retention window</text>
+  <path d="M470,112 H498" class="ln" marker-end="url(#arr)"/>
+  <path d="M700,112 H728" class="ln" marker-end="url(#arr)"/>
+
+  <!-- row labels -->
+  <text x="40" y="186" class="h">Current version</text>
+  <text x="40" y="202" class="n">SELECT * FROM users_bronze</text>
+  <text x="40" y="244" class="h">Old data files</text>
+  <text x="40" y="260" class="n">Parquet files on storage</text>
+  <text x="40" y="302" class="h">Time travel</text>
+  <text x="40" y="318" class="n">VERSION AS OF 1</text>
+  <text x="40" y="360" class="h">Change feed</text>
+  <text x="40" y="376" class="n">'delete' rows in _change_data</text>
+
+  <!-- cells: stage 1 -->
+  <rect x="270" y="166" width="200" height="44" rx="8" class="g"/><text x="286" y="193" class="l">hidden (skipped by DV)</text>
+  <rect x="270" y="224" width="200" height="44" rx="8" class="p"/><text x="286" y="251" class="l">still hold the rows</text>
+  <rect x="270" y="282" width="200" height="44" rx="8" class="p"/><text x="286" y="309" class="l">returns the person</text>
+  <rect x="270" y="340" width="200" height="44" rx="8" class="p"/><text x="286" y="367" class="l">full deleted record</text>
+  <!-- stage 2 -->
+  <rect x="500" y="166" width="200" height="44" rx="8" class="g"/><text x="516" y="193" class="l">gone from current files</text>
+  <rect x="500" y="224" width="200" height="44" rx="8" class="p"/><text x="516" y="251" class="l">kept for history</text>
+  <rect x="500" y="282" width="200" height="44" rx="8" class="p"/><text x="516" y="309" class="l">returns the person</text>
+  <rect x="500" y="340" width="200" height="44" rx="8" class="p"/><text x="516" y="367" class="l">full deleted record</text>
+  <!-- stage 3 -->
+  <rect x="730" y="166" width="200" height="44" rx="8" class="g"/><text x="746" y="193" class="l">gone</text>
+  <rect x="730" y="224" width="200" height="44" rx="8" class="g"/><text x="746" y="251" class="l">deleted</text>
+  <rect x="730" y="282" width="200" height="44" rx="8" class="g"/><text x="746" y="309" class="l">fails: files missing</text>
+  <rect x="730" y="340" width="200" height="44" rx="8" class="g"/><text x="746" y="367" class="l">deleted</text>
+
+  <text x="40" y="414" class="n">VACUUM keeps files that versions inside the retention window (default 7 days) still need. GDPR allows about a month, so schedule</text>
+  <text x="40" y="432" class="n">REORG and VACUUM well within that. The demo disables the safety check and uses RETAIN 0 HOURS to see the effect immediately.</text>
+
+  <rect x="40" y="450" width="12" height="12" rx="3" class="p"/>
+  <text x="58" y="461" class="n">still readable</text>
+  <rect x="150" y="450" width="12" height="12" rx="3" class="g"/>
+  <text x="168" y="461" class="n">gone</text>
+</svg>

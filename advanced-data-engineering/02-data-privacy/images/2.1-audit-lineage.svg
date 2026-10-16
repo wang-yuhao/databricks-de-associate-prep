@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Where audit evidence comes from: audit system table, lineage system tables and Delta table history">
+  <rect x="0.75" y="0.75" width="958.5" height="428.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+  </style>
+  <text x="24" y="36" class="t">Audit your data: three sources of evidence</text>
+  <text x="24" y="58" class="n">Every request passes through Unity Catalog, so it can log who touched what. Delta adds its own log of every write.</text>
+
+  <!-- actors -->
+  <rect x="30" y="96" width="190" height="56" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="119" class="h">Analysts</text>
+  <text x="46" y="139" class="n">SQL editor, notebooks</text>
+  <rect x="30" y="176" width="190" height="56" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="199" class="h">BI dashboards</text>
+  <text x="46" y="219" class="n">service connections</text>
+  <rect x="30" y="256" width="190" height="56" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="279" class="h">Pipelines and jobs</text>
+  <text x="46" y="299" class="n">service principals</text>
+
+  <path d="M220,124 L298,148" class="ln" marker-end="url(#arr)"/>
+  <path d="M220,204 H298" class="ln" marker-end="url(#arr)"/>
+  <path d="M220,284 L298,260" class="ln" marker-end="url(#arr)"/>
+
+  <!-- UC -->
+  <rect x="300" y="120" width="220" height="168" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="316" y="146" class="h">Unity Catalog</text>
+  <text x="316" y="168" class="n">authorizes every read and write:</text>
+  <text x="316" y="186" class="n">grants, row filters, column masks</text>
+  <rect x="312" y="214" width="196" height="58" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="326" y="237" class="h">Delta table customers</text>
+  <text x="326" y="257" class="n">_delta_log: one entry per write</text>
+
+  <!-- evidence -->
+  <rect x="600" y="88" width="330" height="70" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="616" y="114" class="h">system.access.audit</text>
+  <text x="616" y="134" class="n">every request, reads included: who, what, when,</text>
+  <text x="616" y="150" class="n">from which IP and client</text>
+  <rect x="600" y="174" width="330" height="70" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="616" y="200" class="h">system.access.table_lineage / column_lineage</text>
+  <text x="616" y="220" class="n">which tables and columns feed which: find every</text>
+  <text x="616" y="236" class="n">downstream copy of a PII column</text>
+  <rect x="600" y="260" width="330" height="70" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="616" y="286" class="h">DESCRIBE HISTORY customers</text>
+  <text x="616" y="306" class="n">every write to this table: version, user,</text>
+  <text x="616" y="322" class="n">operation and its parameters</text>
+
+  <path d="M520,150 L598,124" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <path d="M520,190 L598,208" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <path d="M508,258 L598,294" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+  <text x="30" y="368" class="n">Only DESCRIBE HISTORY runs locally; the system tables need a Unity Catalog workspace (query shown below the next cell).</text>
+
+  <rect x="30" y="390" width="14" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="52" y="402" class="n">users</text>
+  <rect x="120" y="390" width="14" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="142" y="402" class="n">governance engine</text>
+  <rect x="280" y="390" width="14" height="14" rx="3" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="302" y="402" class="n">table / logs</text>
+  <line x1="400" y1="397" x2="436" y2="397" class="ln" stroke-dasharray="5 4"/>
+  <text x="444" y="402" class="n">records written as a side effect</text>
+</svg>

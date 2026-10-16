@@ -1,0 +1,43 @@
+# A production-style project: tested Python package + job, deployed by CI/CD to dev -> stage -> prod.
+bundle:
+  name: orders_cicd
+
+include:
+  - resources/*.yml
+
+artifacts:
+  orders_lib:
+    type: whl
+    path: .
+    build: python -m pip wheel --no-deps -w dist .
+
+variables:
+  catalog:
+    default: workspace
+  schema:
+    default: orders_cicd_dev
+  service_principal:
+    description: Application ID of the service principal that runs stage/prod (set in CI).
+    default: ""
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  stage:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: orders_cicd_stage
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: orders_cicd
+    # In a real setup prod runs as a service principal, never as a person:
+    # run_as:
+    #   service_principal_name: ${var.service_principal}

@@ -1,0 +1,18 @@
+resources:
+  jobs:
+    orders_cicd_job:
+      name: orders_cicd_job
+      tasks:
+        - task_key: build_daily_summary
+          environment_key: default
+          python_wheel_task:
+            package_name: orders_lib
+            entry_point: daily_summary
+            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}"]
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - ../dist/*.whl

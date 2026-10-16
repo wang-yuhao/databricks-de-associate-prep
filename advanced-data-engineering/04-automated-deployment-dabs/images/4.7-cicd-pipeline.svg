@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="539" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .src{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+      .ci{fill:#1baf7a;fill-opacity:0.12;stroke:#1baf7a;stroke-width:1.5}
+      .cfg{fill:#52514e;fill-opacity:0.1;stroke:#52514e;stroke-width:1.5}
+      .stg{fill:#eda100;fill-opacity:0.12;stroke:#eda100;stroke-width:1.5}
+      .prd{fill:#eb6834;fill-opacity:0.12;stroke:#eb6834;stroke-width:1.5}
+      .sec{fill:#e34948;fill-opacity:0.1;stroke:#e34948;stroke-width:1.5}
+      .fail{fill:#e34948;fill-opacity:0.05;stroke:#e34948;stroke-width:1.5;stroke-dasharray:5 4}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">CI/CD for bundles/03_cicd_dab with GitHub Actions (bundle-ci-cd.yml)</text>
+
+  <text x="30" y="66" class="n">TRIGGER</text>
+  <text x="240" y="66" class="n">JOB ci (EVERY TRIGGER)</text>
+  <text x="480" y="66" class="n">THEN</text>
+
+  <!-- triggers -->
+  <rect x="30" y="76" width="175" height="76" rx="8" class="src"/>
+  <text x="44" y="100" class="b">pull_request</text>
+  <text x="44" y="122" class="l">changes under</text>
+  <text x="44" y="139" class="l">bundles/03_cicd_dab/</text>
+
+  <rect x="30" y="176" width="175" height="76" rx="8" class="src"/>
+  <text x="44" y="200" class="b">push to main</text>
+  <text x="44" y="222" class="l">the PR was merged</text>
+
+  <rect x="30" y="276" width="175" height="76" rx="8" class="src"/>
+  <text x="44" y="300" class="b">release published</text>
+  <text x="44" y="322" class="l">a tagged version</text>
+
+  <!-- ci -->
+  <rect x="240" y="76" width="205" height="276" rx="8" class="ci"/>
+  <text x="254" y="100" class="b">ci</text>
+  <text x="254" y="126" class="l">1  checkout, Python 3.11,</text>
+  <text x="272" y="143" class="l">Java 17</text>
+  <text x="254" y="169" class="l">2  pytest: unit tests on</text>
+  <text x="272" y="186" class="l">local Spark</text>
+  <text x="254" y="212" class="l">3  databricks bundle</text>
+  <text x="272" y="229" class="l">validate -t stage</text>
+  <text x="254" y="268" class="n">deploy jobs declare</text>
+  <text x="254" y="284" class="n">needs: ci, so nothing</text>
+  <text x="254" y="300" class="n">deploys unless it passes</text>
+
+  <line x1="205" y1="114" x2="238" y2="114" class="ar"/>
+  <line x1="205" y1="214" x2="238" y2="214" class="ar"/>
+  <line x1="205" y1="314" x2="238" y2="314" class="ar"/>
+
+  <!-- lane 1: PR -->
+  <rect x="480" y="76" width="450" height="76" rx="8" class="fail"/>
+  <text x="494" y="100" class="b">PR: stop after ci</text>
+  <text x="494" y="122" class="l">green = ready to review and merge</text>
+  <text x="494" y="139" class="l">red = merge blocked; fix and push again</text>
+  <line x1="445" y1="114" x2="478" y2="114" class="ar"/>
+
+  <!-- lane 2: stage -->
+  <rect x="480" y="176" width="210" height="76" rx="8" class="stg"/>
+  <text x="494" y="200" class="b">deploy-stage</text>
+  <text x="494" y="222" class="l">bundle deploy -t stage</text>
+  <text x="494" y="239" class="n">builds and uploads the wheel</text>
+
+  <rect x="720" y="176" width="210" height="76" rx="8" class="stg"/>
+  <text x="734" y="200" class="b">integration test</text>
+  <text x="734" y="222" class="l">bundle run -t stage</text>
+  <text x="734" y="239" class="l">orders_cicd_job</text>
+  <line x1="445" y1="214" x2="478" y2="214" class="ar"/>
+  <line x1="690" y1="214" x2="718" y2="214" class="ar"/>
+
+  <!-- lane 3: prod -->
+  <rect x="480" y="276" width="210" height="76" rx="8" class="ci"/>
+  <text x="494" y="300" class="b">environment: prod</text>
+  <text x="494" y="322" class="l">required reviewers</text>
+  <text x="494" y="339" class="l">approve the job</text>
+
+  <rect x="720" y="276" width="210" height="76" rx="8" class="prd"/>
+  <text x="734" y="300" class="b">deploy-prod</text>
+  <text x="734" y="322" class="l">bundle deploy -t prod</text>
+  <text x="734" y="339" class="n">same commit stage tested</text>
+  <line x1="445" y1="314" x2="478" y2="314" class="ar"/>
+  <line x1="690" y1="314" x2="718" y2="314" class="ar"/>
+
+  <!-- secrets and artifact -->
+  <rect x="30" y="384" width="440" height="110" rx="8" class="sec"/>
+  <text x="44" y="408" class="b">GitHub secrets, referenced by name only</text>
+  <text x="44" y="430" class="l">DATABRICKS_HOST, DATABRICKS_CLIENT_ID,</text>
+  <text x="44" y="447" class="l">DATABRICKS_CLIENT_SECRET → env of every job</text>
+  <text x="44" y="474" class="n">The CLI signs in as a service principal (OAuth M2M).</text>
+
+  <rect x="490" y="384" width="440" height="110" rx="8" class="cfg"/>
+  <text x="504" y="408" class="b">Wheel artifact (artifacts.orders_lib)</text>
+  <text x="504" y="430" class="l">python -m pip wheel --no-deps -w dist .</text>
+  <text x="504" y="447" class="l">→ dist/orders_lib-0.1.0-py3-none-any.whl</text>
+  <text x="504" y="474" class="n">job environment installs it from ../dist/*.whl</text>
+
+  <text x="30" y="522" class="n">Blue = Git event · green = CI system and approval gate · amber = stage · orange = prod · red = secret-sensitive · red dashed = blocked on failure.</text>
+</svg>

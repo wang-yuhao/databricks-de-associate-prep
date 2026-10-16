@@ -1,0 +1,34 @@
+resources:
+  jobs:
+    orders_job:
+      name: orders_job_${bundle.target}
+      # TODO 4: send an email to ${var.alert_email} when the job fails (email_notifications).
+      tasks:
+        - task_key: land_sample_orders
+          notebook_task:
+            notebook_path: ../src/notebooks/land_sample_orders.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.landing_volume}
+              rows: ${var.orders_per_run}
+
+        - task_key: refresh_pipeline
+          depends_on:
+            - task_key: land_sample_orders
+          pipeline_task:
+            # Reference to another resource of this bundle, resolved at deploy time.
+            pipeline_id: ${resources.pipelines.orders_pipeline.id}
+
+        - task_key: report
+          depends_on:
+            - task_key: refresh_pipeline
+          notebook_task:
+            notebook_path: ../src/notebooks/report.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"   # daily 06:00; paused automatically in dev mode
+        timezone_id: Europe/Berlin

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="319" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .g{fill:#52514e;fill-opacity:0.1;stroke:#52514e;stroke-width:1.5}
+      .c{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">Ways to deploy to Databricks: from clicking to declaring</text>
+
+  <rect x="36" y="70" width="160" height="120" rx="8" class="g"/>
+  <text x="50" y="96" class="b">UI (click-ops)</text>
+  <text x="50" y="120" class="l">explore, prototype</text>
+  <text x="50" y="146" class="n">not repeatable,</text>
+  <text x="50" y="162" class="n">no review, no history</text>
+
+  <rect x="218" y="70" width="160" height="120" rx="8" class="g"/>
+  <text x="232" y="96" class="b">REST API</text>
+  <text x="232" y="120" class="l">any language, any call</text>
+  <text x="232" y="146" class="n">you write all the</text>
+  <text x="232" y="162" class="n">orchestration</text>
+
+  <rect x="400" y="70" width="160" height="120" rx="8" class="g"/>
+  <text x="414" y="96" class="b">Python SDK</text>
+  <text x="414" y="120" class="l">databricks-sdk scripts</text>
+  <text x="414" y="146" class="n">you decide create vs.</text>
+  <text x="414" y="162" class="n">update vs. delete</text>
+
+  <rect x="582" y="70" width="160" height="120" rx="8" class="g"/>
+  <text x="596" y="96" class="b">CLI</text>
+  <text x="596" y="120" class="l">databricks jobs create</text>
+  <text x="596" y="146" class="n">scripts single objects,</text>
+  <text x="596" y="162" class="n">same as the SDK</text>
+
+  <rect x="764" y="70" width="160" height="120" rx="8" class="c"/>
+  <text x="778" y="96" class="b">Bundles</text>
+  <text x="778" y="120" class="l">CLI: bundle deploy</text>
+  <text x="778" y="146" class="n">desired state in YAML;</text>
+  <text x="778" y="162" class="n">deploy applies the diff</text>
+
+  <line x1="36" y1="222" x2="922" y2="222" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="36" y="248" class="l"><tspan font-weight="600">Imperative:</tspan> you say HOW, one call at a time</text>
+  <text x="924" y="248" class="l" text-anchor="end"><tspan font-weight="600">Declarative:</tspan> you say WHAT, the tool works out the calls</text>
+
+  <rect x="36" y="272" width="14" height="14" rx="3" class="g"/><text x="56" y="284" class="n">imperative tool</text>
+  <rect x="170" y="272" width="14" height="14" rx="3" class="c"/><text x="190" y="284" class="n">project as source code: jobs, pipelines and their files, per target, with state kept in the workspace</text>
+</svg>

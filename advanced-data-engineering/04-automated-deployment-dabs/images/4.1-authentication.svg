@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="379" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .dev{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+      .ci{fill:#1baf7a;fill-opacity:0.12;stroke:#1baf7a;stroke-width:1.5}
+      .cfg{fill:#52514e;fill-opacity:0.1;stroke:#52514e;stroke-width:1.5}
+      .sec{fill:#e34948;fill-opacity:0.1;stroke:#e34948;stroke-width:1.5}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">Two ways the CLI authenticates: humans (U2M) and CI (M2M)</text>
+
+  <text x="30" y="68" class="n">USER-TO-MACHINE OAUTH · your own interactive work</text>
+  <rect x="30" y="80" width="180" height="84" rx="8" class="dev"/>
+  <text x="44" y="106" class="b">Developer</text>
+  <text x="44" y="128" class="l">laptop, terminal,</text>
+  <text x="44" y="145" class="l">VS Code</text>
+
+  <rect x="245" y="80" width="230" height="84" rx="8" class="dev"/>
+  <text x="259" y="106" class="b">databricks auth login</text>
+  <text x="259" y="128" class="l">--host &lt;url&gt; --profile DEFAULT</text>
+  <text x="259" y="145" class="l">opens a browser to sign in</text>
+
+  <rect x="510" y="80" width="220" height="84" rx="8" class="cfg"/>
+  <text x="524" y="106" class="b">~/.databrickscfg profile</text>
+  <text x="524" y="128" class="l">host + auth type; OAuth tokens</text>
+  <text x="524" y="145" class="l">cached by the CLI, no password</text>
+
+  <text x="30" y="210" class="n">MACHINE-TO-MACHINE OAUTH · CI/CD pipelines (lesson 4.7)</text>
+  <rect x="30" y="222" width="180" height="84" rx="8" class="ci"/>
+  <text x="44" y="248" class="b">CI runner</text>
+  <text x="44" y="270" class="l">GitHub Actions job,</text>
+  <text x="44" y="287" class="l">no browser, no human</text>
+
+  <rect x="245" y="222" width="230" height="84" rx="8" class="sec"/>
+  <text x="259" y="248" class="b">CI secrets, by name only</text>
+  <text x="259" y="270" class="l">DATABRICKS_HOST</text>
+  <text x="259" y="287" class="l">DATABRICKS_CLIENT_ID / _SECRET</text>
+
+  <rect x="510" y="222" width="220" height="84" rx="8" class="ci"/>
+  <text x="524" y="248" class="b">Service principal</text>
+  <text x="524" y="270" class="l">client ID + OAuth secret are</text>
+  <text x="524" y="287" class="l">exchanged for a short-lived token</text>
+
+  <rect x="770" y="80" width="160" height="226" rx="8" class="cfg"/>
+  <text x="784" y="106" class="b">Databricks</text>
+  <text x="784" y="124" class="b">workspace</text>
+  <text x="784" y="152" class="l">bundle validate,</text>
+  <text x="784" y="169" class="l">deploy and run act</text>
+  <text x="784" y="186" class="l">as this identity:</text>
+  <text x="784" y="210" class="l">you (dev target)</text>
+  <text x="784" y="234" class="l">service principal</text>
+  <text x="784" y="251" class="l">(stage, prod)</text>
+
+  <line x1="210" y1="122" x2="243" y2="122" class="ar"/>
+  <line x1="475" y1="122" x2="508" y2="122" class="ar"/>
+  <line x1="730" y1="122" x2="768" y2="122" class="ar"/>
+  <line x1="210" y1="264" x2="243" y2="264" class="ar"/>
+  <line x1="475" y1="264" x2="508" y2="264" class="ar"/>
+  <line x1="730" y1="264" x2="768" y2="264" class="ar"/>
+
+  <text x="30" y="344" class="n">Red box = secret-sensitive: values live only in the CI secret store and are passed as environment variables.</text>
+  <text x="30" y="362" class="n">Personal access tokens still work but are discouraged. Never paste a token into a notebook or file.</text>
+</svg>

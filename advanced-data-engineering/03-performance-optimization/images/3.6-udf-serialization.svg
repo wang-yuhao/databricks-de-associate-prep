@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 510" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="509" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .ard{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a);stroke-dasharray:5 4}
+    </style>
+  </defs>
+  <text x="28" y="36" class="t">Where the rows go: classic UDF vs pandas UDF vs built-in / SQL UDF</text>
+  <text x="24" y="110" class="b">Classic Python UDF</text>
+  <text x="24" y="128" class="n">@udf</text>
+  <text x="24" y="250" class="b">Pandas / Arrow UDF</text>
+  <text x="24" y="268" class="n">@pandas_udf, useArrow=True</text>
+  <text x="24" y="390" class="b">Built-in or SQL UDF</text>
+  <text x="24" y="408" class="n">F.lower(...), CREATE FUNCTION</text>
+  <line x1="24" y1="190" x2="936" y2="190" stroke="#e4e2dc" stroke-width="1"/>
+  <line x1="24" y1="330" x2="936" y2="330" stroke="#e4e2dc" stroke-width="1"/>
+  <rect x="230" y="74" width="150" height="92" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="305.0" y="116.0" class="l" text-anchor="middle">Executor</text>
+  <text x="305.0" y="133.0" class="l" text-anchor="middle">(JVM)</text>
+  <rect x="420" y="74" width="160" height="92" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="500.0" y="107.5" class="b" text-anchor="middle">serialize</text>
+  <text x="500.0" y="126.5" class="n" text-anchor="middle">pickle every row,</text>
+  <text x="500.0" y="142.5" class="n" text-anchor="middle">unpickle every result</text>
+  <rect x="620" y="74" width="150" height="92" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="695.0" y="107.5" class="b" text-anchor="middle">Python worker</text>
+  <text x="695.0" y="126.5" class="n" text-anchor="middle">f(row) called</text>
+  <text x="695.0" y="142.5" class="n" text-anchor="middle">once per row</text>
+  <path d="M380,104 L418,104" class="ar"/>
+  <path d="M580,104 L618,104" class="ar"/>
+  <path d="M618,140 L582,140" class="ar"/>
+  <path d="M418,140 L382,140" class="ar"/>
+  <text x="790" y="106" class="n">plan: BatchEvalPython</text>
+  <text x="790" y="124" class="n">slowest: per-row cost,</text>
+  <text x="790" y="142" class="n">no codegen across it</text>
+  <rect x="230" y="214" width="150" height="92" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="305.0" y="256.0" class="l" text-anchor="middle">Executor</text>
+  <text x="305.0" y="273.0" class="l" text-anchor="middle">(JVM)</text>
+  <rect x="420" y="214" width="160" height="92" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="500.0" y="247.5" class="b" text-anchor="middle">Arrow</text>
+  <text x="500.0" y="266.5" class="n" text-anchor="middle">columnar batches</text>
+  <text x="500.0" y="282.5" class="n" text-anchor="middle">of ~10 k rows</text>
+  <rect x="620" y="214" width="150" height="92" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="695.0" y="247.5" class="b" text-anchor="middle">Python worker</text>
+  <text x="695.0" y="266.5" class="n" text-anchor="middle">f(pd.Series) called</text>
+  <text x="695.0" y="282.5" class="n" text-anchor="middle">once per batch</text>
+  <path d="M380,244 L418,244" class="ar"/>
+  <path d="M580,244 L618,244" class="ar"/>
+  <path d="M618,280 L582,280" class="ar"/>
+  <path d="M418,280 L382,280" class="ar"/>
+  <text x="790" y="246" class="n">plan: ArrowEvalPython</text>
+  <text x="790" y="264" class="n">still crosses processes,</text>
+  <text x="790" y="282" class="n">but in cheap batches</text>
+  <rect x="230" y="354" width="540" height="92" rx="8" fill="#008300" fill-opacity="0.12" stroke="#008300" stroke-width="1.5"/>
+  <text x="500.0" y="387.5" class="b" text-anchor="middle">Executor (JVM) · WholeStageCodegen</text>
+  <text x="500.0" y="406.5" class="n" text-anchor="middle">scan → Project(lower(trim(email)), round(...)) compiled into one function</text>
+  <text x="500.0" y="422.5" class="n" text-anchor="middle">no Python process, no serialization</text>
+  <text x="790" y="386" class="n">plan: Project inside</text>
+  <text x="790" y="404" class="n">WholeStageCodegen</text>
+  <text x="790" y="422" class="n">fastest, optimizable</text>
+  <rect x="24" y="481" width="16" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="46" y="492" class="n">process (JVM or Python)</text>
+  <rect x="221.79999999999998" y="481" width="16" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="243.79999999999998" y="492" class="n">row-by-row serialization</text>
+  <rect x="426.19999999999993" y="481" width="16" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="448.19999999999993" y="492" class="n">Arrow batch</text>
+  <rect x="544.8" y="481" width="16" height="14" rx="3" fill="#008300" fill-opacity="0.12" stroke="#008300" stroke-width="1.5"/>
+  <text x="566.8" y="492" class="n">stays in the JVM</text>
+</svg>

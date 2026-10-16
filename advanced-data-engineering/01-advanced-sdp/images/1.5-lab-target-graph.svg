@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 530" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Lab target pipeline: EU CSV and US JSON append flows into orders_bronze, products materialized view, customers CDC into an SCD type 2 customers table, orders_silver with orders_quarantine, and two gold materialized views">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .src{fill:#2a78d6;fill-opacity:.12;stroke:#2a78d6;stroke-width:1.5}
+    .brz{fill:#eb6834;fill-opacity:.12;stroke:#eb6834;stroke-width:1.5}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .gld{fill:#eda100;fill-opacity:.14;stroke:#eda100;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .step{font-size:11px;font-weight:600;fill:#52514e}
+    .tag{fill:#52514e;fill-opacity:.10;stroke:none}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="530" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Lab target: the multi-source e-commerce pipeline you will build</text>
+
+  <!-- sources -->
+  <rect class="src" x="24" y="66" width="126" height="56" rx="8"/>
+  <text class="b m" x="87" y="90">orders_eu/</text><text class="n m" x="87" y="109">CSV, all strings</text>
+  <rect class="src" x="24" y="146" width="126" height="56" rx="8"/>
+  <text class="b m" x="87" y="170">orders_us/</text><text class="n m" x="87" y="189">JSON, other names</text>
+  <rect class="src" x="24" y="274" width="126" height="56" rx="8"/>
+  <text class="b m" x="87" y="298">products/</text><text class="n m" x="87" y="317">CSV</text>
+  <rect class="src" x="24" y="372" width="126" height="56" rx="8"/>
+  <text class="b m" x="87" y="396">customers_cdc/</text><text class="n m" x="87" y="415">JSON change events</text>
+
+  <!-- column 2 -->
+  <rect class="flw" x="176" y="66" width="130" height="56" rx="8"/>
+  <text class="b m" x="241" y="90">orders_eu_flow</text><text class="n m" x="241" y="109">cast + rename</text>
+  <rect class="flw" x="176" y="146" width="130" height="56" rx="8"/>
+  <text class="b m" x="241" y="170">orders_us_flow</text><text class="n m" x="241" y="189">rename columns</text>
+  <rect class="brz" x="176" y="274" width="130" height="56" rx="8"/>
+  <text class="b m" x="241" y="298">products</text><text class="n m" x="241" y="317">materialized view</text>
+  <rect class="brz" x="176" y="372" width="130" height="56" rx="8"/>
+  <text class="b m" x="241" y="396">customers_cdc</text><text class="n m" x="241" y="415">streaming table</text>
+  <path class="a" d="M150,94 H174"/>
+  <path class="a" d="M150,174 H174"/>
+  <path class="a" d="M150,302 H174"/>
+  <path class="a" d="M150,400 H174"/>
+
+  <!-- column 3 -->
+  <rect class="brz" x="332" y="88" width="170" height="92" rx="8"/>
+  <text class="b m" x="417" y="116">orders_bronze</text>
+  <text class="n m" x="417" y="135">one unified schema</text>
+  <text class="n m" x="417" y="153">cluster_by: source_region</text>
+  <path class="a" d="M306,94 H318 V120 H330"/>
+  <path class="a" d="M306,174 H318 V150 H330"/>
+  <rect class="flw" x="332" y="372" width="170" height="56" rx="8"/>
+  <text class="b m" x="417" y="396">AUTO CDC flow</text><text class="n m" x="417" y="415">keys, sequence_by</text>
+  <path class="a" d="M306,400 H330"/>
+
+  <!-- column 4 -->
+  <rect class="slv" x="530" y="64" width="176" height="96" rx="8"/>
+  <text class="b m" x="618" y="90">orders_silver</text>
+  <text class="n m" x="618" y="109">expect_all_or_drop</text>
+  <text class="n m" x="618" y="127">cluster_by: order_date,</text>
+  <text class="n m" x="618" y="143">source_region</text>
+  <rect class="bad" x="530" y="184" width="176" height="60" rx="8"/>
+  <text class="b m" x="618" y="209">orders_quarantine</text><text class="n m" x="618" y="228">rejected rows + failed_rules</text>
+  <path class="a" d="M502,112 H528"/>
+  <path class="a" d="M502,160 H516 V214 H528"/>
+  <rect class="slv" x="530" y="360" width="176" height="80" rx="8"/>
+  <text class="b m" x="618" y="386">customers</text>
+  <text class="n m" x="618" y="405">SCD type 2</text>
+  <text class="n m" x="618" y="422">__START_AT, __END_AT</text>
+  <path class="a" d="M502,400 H528"/>
+
+  <!-- column 5: gold -->
+  <rect class="gld" x="740" y="74" width="196" height="76" rx="8"/>
+  <text class="b m" x="838" y="102">revenue_by_category_daily</text><text class="n m" x="838" y="122">join products</text>
+  <rect class="gld" x="740" y="352" width="196" height="76" rx="8"/>
+  <text class="b m" x="838" y="380">revenue_by_customer_tier</text><text class="n m" x="838" y="400">join current customers</text>
+  <path class="a" d="M706,104 H738"/>
+  <path class="a" d="M706,140 H722 V372 H738"/>
+  <path class="a" d="M306,302 H800 V152"/>
+  <path class="a" d="M706,408 H738"/>
+
+  <!-- step tags -->
+  <rect class="tag" x="332" y="62" width="52" height="18" rx="4"/><text class="step" x="340" y="75">STEP 1</text>
+  <rect class="tag" x="176" y="250" width="52" height="18" rx="4"/><text class="step" x="184" y="263">STEP 2</text>
+  <rect class="tag" x="654" y="40" width="52" height="18" rx="4"/><text class="step" x="662" y="53">STEP 3</text>
+
+  <!-- legend -->
+  <g transform="translate(24,470)">
+    <rect class="src" x="0" y="-11" width="14" height="14" rx="3"/><text class="n" x="20" y="0">Source files</text>
+    <rect class="flw" x="112" y="-11" width="14" height="14" rx="3"/><text class="n" x="132" y="0">Flow</text>
+    <rect class="brz" x="186" y="-11" width="14" height="14" rx="3"/><text class="n" x="206" y="0">Bronze</text>
+    <rect class="slv" x="270" y="-11" width="14" height="14" rx="3"/><text class="n" x="290" y="0">Silver</text>
+    <rect class="gld" x="350" y="-11" width="14" height="14" rx="3"/><text class="n" x="370" y="0">Gold</text>
+    <rect class="bad" x="424" y="-11" width="14" height="14" rx="3"/><text class="n" x="444" y="0">Quarantine</text>
+  </g>
+  <text class="n" x="24" y="500">Step 1: 01_bronze_orders.py. Step 2: 02_dimensions.py (products, customers_cdc, customers).</text>
+  <text class="n" x="24" y="517">Step 3: 03_silver_gold.py (orders_silver, orders_quarantine, both gold views). No row may be lost: bronze = silver + quarantine.</text>
+</svg>

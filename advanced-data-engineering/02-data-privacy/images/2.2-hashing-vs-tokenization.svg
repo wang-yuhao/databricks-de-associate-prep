@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Salted hashing is one-way; tokenization keeps a restricted vault that allows controlled re-identification">
+  <rect x="0.75" y="0.75" width="958.5" height="478.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <marker id="arrr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e34948"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+  </style>
+  <text x="24" y="36" class="t">Two ways to pseudonymize an identifier</text>
+  <text x="24" y="58" class="n">Both give analysts a stable key instead of the email. They differ in whether, and by whom, the key can be turned back.</text>
+
+  <line x1="480" y1="80" x2="480" y2="410" stroke="#e4e2dc" stroke-width="1.5"/>
+
+  <!-- A. hashing -->
+  <text x="40" y="92" class="h">A. Salted hash (one-way)</text>
+  <rect x="40" y="108" width="250" height="52" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="56" y="130" class="h">users_raw.email</text>
+  <text x="56" y="149" class="n">ana@mail.com</text>
+  <path d="M165,160 V196" class="ln" marker-end="url(#arr)"/>
+  <rect x="40" y="198" width="250" height="56" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="56" y="221" class="h">sha2(salt + email, 256)</text>
+  <text x="56" y="241" class="n">lower-cased and trimmed first</text>
+  <rect x="330" y="202" width="130" height="48" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="344" y="222" class="h">secret salt</text>
+  <text x="344" y="240" class="n">in a secret scope</text>
+  <path d="M330,226 H292" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <path d="M165,254 V290" class="ln" marker-end="url(#arr)"/>
+  <rect x="40" y="292" width="250" height="52" rx="8" fill="#6250d6" fill-opacity="0.12" stroke="#6250d6" stroke-width="1.5"/>
+  <text x="56" y="314" class="h">user_key</text>
+  <text x="56" y="333" class="n">9f2c…a71 (same input, same key)</text>
+  <text x="40" y="374" class="n">No path back. Joins still work because the key</text>
+  <text x="40" y="392" class="n">is deterministic. Without the salt, nobody can hash</text>
+  <text x="40" y="410" class="n">a list of known emails and match them.</text>
+
+  <!-- B. tokenization -->
+  <text x="510" y="92" class="h">B. Tokenization with a vault (reversible)</text>
+  <rect x="510" y="108" width="230" height="52" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="526" y="130" class="h">users_raw.email</text>
+  <text x="526" y="149" class="n">ana@mail.com</text>
+  <path d="M625,160 V196" class="ln" marker-end="url(#arr)"/>
+  <rect x="510" y="198" width="230" height="56" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="526" y="221" class="h">MERGE: new email gets uuid()</text>
+  <text x="526" y="241" class="n">random token, no math link</text>
+  <rect x="780" y="198" width="150" height="56" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="794" y="221" class="h">token_vault</text>
+  <text x="794" y="241" class="n">token ↔ email</text>
+  <path d="M740,226 H778" class="ln" marker-end="url(#arr)"/>
+  <path d="M625,254 V290" class="ln" marker-end="url(#arr)"/>
+  <rect x="510" y="292" width="230" height="52" rx="8" fill="#6250d6" fill-opacity="0.12" stroke="#6250d6" stroke-width="1.5"/>
+  <text x="526" y="314" class="h">users_tokenized</text>
+  <text x="526" y="333" class="n">customer_token 3b1e…</text>
+  <path d="M740,318 H855 V256" fill="none" stroke="#e34948" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrr)"/>
+  <text x="760" y="338" class="n">re-identify: join on token</text>
+  <text x="760" y="354" class="n">(privacy team only)</text>
+  <text x="510" y="392" class="n">Delete a person's vault row and their tokens point</text>
+  <text x="510" y="410" class="n">nowhere (crypto-shredding).</text>
+
+  <rect x="40" y="440" width="14" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="62" y="452" class="n">raw source</text>
+  <rect x="150" y="440" width="14" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="172" y="452" class="n">transformation</text>
+  <rect x="280" y="440" width="14" height="14" rx="3" fill="#6250d6" fill-opacity="0.12" stroke="#6250d6" stroke-width="1.5"/>
+  <text x="302" y="452" class="n">Silver output for analysts</text>
+  <rect x="460" y="440" width="14" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="482" y="452" class="n">restricted (secret or vault)</text>
+</svg>

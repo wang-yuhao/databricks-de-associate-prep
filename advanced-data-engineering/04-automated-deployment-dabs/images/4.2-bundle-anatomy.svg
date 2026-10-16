@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="439" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .src{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+      .cfg{fill:#52514e;fill-opacity:0.1;stroke:#52514e;stroke-width:1.5}
+      .opt{fill:#52514e;fill-opacity:0.05;stroke:#52514e;stroke-width:1.5;stroke-dasharray:5 4}
+      .dev{fill:#6250d6;fill-opacity:0.12;stroke:#6250d6;stroke-width:1.5}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">Anatomy of a bundle: bundles/01_simple_dab</text>
+
+  <!-- folder tree -->
+  <text x="30" y="72" class="n">FOLDER</text>
+  <rect x="30" y="82" width="220" height="200" rx="8" class="src"/>
+  <g class="l">
+    <text x="46" y="110" font-weight="600">01_simple_dab/</text>
+    <text x="62" y="138">databricks.yml</text>
+    <text x="62" y="166">resources/</text>
+    <text x="82" y="190">hello_job.yml</text>
+    <text x="62" y="218">src/</text>
+    <text x="82" y="242">hello.py</text>
+  </g>
+  <g stroke="#2a78d6" stroke-width="1.2" fill="none">
+    <path d="M52,118 V214 M52,134 H58 M52,162 H58 M52,214 H58"/>
+    <path d="M70,170 V186 H78 M70,222 V238 H78"/>
+  </g>
+  <text x="30" y="306" class="n">Everything Git does not ignore</text>
+  <text x="30" y="322" class="n">is uploaded on deploy.</text>
+
+  <!-- databricks.yml sections -->
+  <text x="290" y="72" class="n">databricks.yml (TOP-LEVEL KEYS)</text>
+  <rect x="290" y="82" width="300" height="50" rx="8" class="cfg"/>
+  <text x="304" y="104" class="b">bundle</text>
+  <text x="304" y="122" class="l">name: simple_dab</text>
+
+  <rect x="290" y="142" width="300" height="50" rx="8" class="cfg"/>
+  <text x="304" y="164" class="b">include</text>
+  <text x="304" y="182" class="l">- resources/*.yml</text>
+
+  <rect x="290" y="202" width="300" height="50" rx="8" class="opt"/>
+  <text x="304" y="224" class="b">variables <tspan class="n" font-weight="400">(optional, used from 4.4)</tspan></text>
+  <text x="304" y="242" class="l">name: default + description</text>
+
+  <rect x="290" y="262" width="300" height="50" rx="8" class="opt"/>
+  <text x="304" y="284" class="b">resources <tspan class="n" font-weight="400">(here or in included files)</tspan></text>
+  <text x="304" y="302" class="l">jobs, pipelines, dashboards, ...</text>
+
+  <rect x="290" y="322" width="300" height="50" rx="8" class="dev"/>
+  <text x="304" y="344" class="b">targets</text>
+  <text x="304" y="362" class="l">dev: mode development, default: true</text>
+
+  <!-- resource file and source -->
+  <text x="640" y="72" class="n">INCLUDED RESOURCE FILE</text>
+  <rect x="640" y="122" width="290" height="90" rx="8" class="cfg"/>
+  <text x="654" y="146" class="b">resources/hello_job.yml</text>
+  <text x="654" y="168" class="l">resources.jobs.hello_job</text>
+  <text x="654" y="186" class="l">task say_hello: notebook_task</text>
+  <text x="654" y="202" class="n">no cluster: serverless jobs compute</text>
+
+  <rect x="640" y="282" width="290" height="70" rx="8" class="src"/>
+  <text x="654" y="306" class="b">src/hello.py</text>
+  <text x="654" y="328" class="l">the notebook the task runs</text>
+
+  <line x1="590" y1="167" x2="638" y2="167" class="ar"/>
+  <line x1="785" y1="212" x2="785" y2="280" class="ar"/>
+  <text x="795" y="244" class="n">notebook_path:</text>
+  <text x="795" y="260" class="n">../src/hello.py</text>
+
+  <text x="30" y="404" class="n">Grey = configuration · blue = source files · purple = dev target · dashed = optional key.</text>
+  <text x="30" y="422" class="n">Paths inside a resource file are relative to that file, hence ../src/hello.py.</text>
+</svg>

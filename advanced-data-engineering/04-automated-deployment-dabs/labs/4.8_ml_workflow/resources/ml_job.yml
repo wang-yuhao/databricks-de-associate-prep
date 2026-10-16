@@ -1,0 +1,10 @@
+# LAB 4.8 - Adding ML to Engineering Workflows with DABs
+# TODO 1: define a job "orders_ml_job" (resource key and name) with two tasks:
+#   - "build_daily_summary": the same wheel task as resources/orders_job.yml (environment "default")
+#   - "train_revenue_model": a spark_python_task running ../src/ml/train_revenue_model.py with
+#     parameters ["--catalog", <catalog variable>, "--schema", <schema variable>]; it runs only after
+#     build_daily_summary and uses its own environment "ml"
+# TODO 2: define two environments: "default" (the wheel, like orders_job.yml) and
+#         "ml" with dependencies scikit-learn and mlflow (environment_version "2", like "default")
+resources:
+  jobs: {}

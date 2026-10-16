@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Capability boundary: the open-source Spark Declarative Pipelines core sits inside Databricks Lakeflow SDP, which adds expectations, Liquid Clustering, AUTO CDC SCD2, the event log, UI and serverless">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .h{font-size:14px;font-weight:600}
+    .l{font-size:13px}
+    .n{font-size:12px;fill:#52514e}
+    .outer{fill:#1baf7a;fill-opacity:.05;stroke:#1baf7a;stroke-width:1.5}
+    .inner{fill:#1baf7a;fill-opacity:.14;stroke:#1baf7a;stroke-width:1.5}
+    .dot{fill:#52514e}
+  </style>
+  <rect x="0" y="0" width="960" height="400" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">What the open-source engine runs, and what Databricks adds</text>
+
+  <rect class="outer" x="24" y="56" width="912" height="290" rx="10"/>
+  <text class="h" x="44" y="82">Databricks Lakeflow Spark Declarative Pipelines</text>
+
+  <rect class="inner" x="44" y="100" width="420" height="226" rx="8"/>
+  <text class="h" x="64" y="126">Apache Spark 4.1+ (open source)</text>
+  <circle class="dot" cx="68" cy="153" r="2.5"/><text class="l" x="80" y="157">@dp.table, dp.create_streaming_table</text>
+  <circle class="dot" cx="68" cy="177" r="2.5"/><text class="l" x="80" y="181">@dp.materialized_view, @dp.temporary_view</text>
+  <circle class="dot" cx="68" cy="201" r="2.5"/><text class="l" x="80" y="205">@dp.append_flow (multi-flow)</text>
+  <circle class="dot" cx="68" cy="225" r="2.5"/><text class="l" x="80" y="229">dp.create_sink (for example a Delta path)</text>
+  <circle class="dot" cx="68" cy="249" r="2.5"/><text class="l" x="80" y="253">SQL: CREATE MATERIALIZED VIEW / STREAMING TABLE</text>
+  <circle class="dot" cx="68" cy="273" r="2.5"/><text class="l" x="80" y="277">spark-pipelines dry-run / run CLI</text>
+  <circle class="dot" cx="68" cy="297" r="2.5"/><text class="l" x="80" y="301">Flow lifecycle, checkpoints, full refresh</text>
+
+  <text class="h" x="500" y="126">Databricks only</text>
+  <circle class="dot" cx="504" cy="153" r="2.5"/><text class="l" x="516" y="157">Expectations: @dp.expect, _or_drop, _or_fail</text>
+  <circle class="dot" cx="504" cy="177" r="2.5"/><text class="l" x="516" y="181">cluster_by (Liquid Clustering), auto optimize</text>
+  <circle class="dot" cx="504" cy="201" r="2.5"/><text class="l" x="516" y="205">AUTO CDC into Delta, SCD type 1 and 2</text>
+  <circle class="dot" cx="504" cy="225" r="2.5"/><text class="l" x="516" y="229">Event log and data-quality metrics</text>
+  <circle class="dot" cx="504" cy="249" r="2.5"/><text class="l" x="516" y="253">Pipeline UI, graph, scheduling</text>
+  <circle class="dot" cx="504" cy="273" r="2.5"/><text class="l" x="516" y="277">Serverless compute, incremental MV refresh</text>
+  <circle class="dot" cx="504" cy="297" r="2.5"/><text class="l" x="516" y="301">Unity Catalog governance</text>
+
+  <text class="n" x="24" y="372">ingest.py in this lesson uses only the inner set, so the same file runs on both engines.</text>
+  <text class="n" x="24" y="390">Code that uses the outer set (for example @dp.expect) fails on the open-source engine.</text>
+</svg>

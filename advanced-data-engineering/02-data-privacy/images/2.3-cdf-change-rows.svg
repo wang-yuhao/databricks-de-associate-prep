@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="One MERGE commit and the change feed rows it produces: update pre-image, update post-image and delete">
+  <rect x="0.75" y="0.75" width="958.5" height="518.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+    .row{stroke:#e4e2dc;stroke-width:1}
+  </style>
+  <text x="24" y="36" class="t">What one commit writes to the Change Data Feed</text>
+  <text x="24" y="58" class="n">Besides the new table version, a CDF-enabled table records one row per changed row, tagged with the change type and version.</text>
+
+  <!-- v1 -->
+  <rect x="40" y="86" width="230" height="150" rx="8" fill="#eb6834" fill-opacity="0.12" stroke="#eb6834" stroke-width="1.5"/>
+  <text x="56" y="110" class="h">users_bronze · version 1</text>
+  <text x="56" y="136" class="n">user_id</text><text x="150" y="136" class="n">city</text>
+  <line x1="48" y1="144" x2="262" y2="144" class="row"/>
+  <text x="56" y="166" class="l">7</text><text x="150" y="166" class="l">Lyon</text>
+  <text x="56" y="192" class="l">9</text><text x="150" y="192" class="l">Oslo</text>
+  <text x="56" y="218" class="l">11</text><text x="150" y="218" class="l">Rome</text>
+
+  <path d="M270,161 H348" class="ln" marker-end="url(#arr)"/>
+
+  <!-- merge -->
+  <rect x="350" y="106" width="250" height="110" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="366" y="130" class="h">MERGE → commit version 2</text>
+  <text x="366" y="160" class="l">UPDATE user 7: city = Nice</text>
+  <text x="366" y="184" class="l">DELETE user 9</text>
+  <text x="366" y="206" class="n">user 11 untouched: no change rows</text>
+
+  <path d="M600,161 H678" class="ln" marker-end="url(#arr)"/>
+
+  <!-- v2 -->
+  <rect x="680" y="86" width="240" height="150" rx="8" fill="#eb6834" fill-opacity="0.12" stroke="#eb6834" stroke-width="1.5"/>
+  <text x="696" y="110" class="h">users_bronze · version 2</text>
+  <text x="696" y="136" class="n">user_id</text><text x="790" y="136" class="n">city</text>
+  <line x1="688" y1="144" x2="912" y2="144" class="row"/>
+  <text x="696" y="166" class="l">7</text><text x="790" y="166" class="l">Nice</text>
+  <text x="696" y="192" class="l">11</text><text x="790" y="192" class="l">Rome</text>
+
+  <path d="M475,216 V272" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="487" y="250" class="n">also written: change rows (_change_data)</text>
+
+  <!-- CDF table -->
+  <rect x="120" y="274" width="560" height="146" rx="8" fill="#52514e" fill-opacity="0.08" stroke="#52514e" stroke-width="1.5"/>
+  <text x="136" y="298" class="h">table_changes('users_bronze', 2)</text>
+  <text x="136" y="324" class="n">_change_type</text><text x="320" y="324" class="n">_commit_version</text><text x="460" y="324" class="n">user_id</text><text x="560" y="324" class="n">city</text>
+  <line x1="128" y1="332" x2="672" y2="332" class="row"/>
+  <text x="136" y="354" class="l">update_preimage</text><text x="320" y="354" class="l">2</text><text x="460" y="354" class="l">7</text><text x="560" y="354" class="l">Lyon</text>
+  <text x="136" y="380" class="l">update_postimage</text><text x="320" y="380" class="l">2</text><text x="460" y="380" class="l">7</text><text x="560" y="380" class="l">Nice</text>
+  <rect x="128" y="390" width="544" height="24" rx="4" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="136" y="407" class="l">delete</text><text x="320" y="407" class="l">2</text><text x="460" y="407" class="l">9</text><text x="560" y="407" class="l">Oslo</text>
+
+  <text x="696" y="354" class="n">← old values</text>
+  <text x="696" y="380" class="n">← new values</text>
+  <text x="696" y="407" class="n">← the whole deleted row</text>
+
+  <text x="40" y="452" class="n">Rows added by an INSERT or append appear as _change_type = 'insert' (version 1 here: one per loaded user). Every row also has _commit_timestamp.</text>
+  <text x="40" y="470" class="n">Downstream consumers usually drop update_preimage and keep the latest change per key.</text>
+
+  <g transform="translate(40,492)">
+    <rect x="0" y="0" width="12" height="12" rx="3" fill="#eb6834" fill-opacity="0.12" stroke="#eb6834" stroke-width="1.5"/>
+    <text x="18" y="11" class="n">Bronze table</text>
+    <rect x="110" y="0" width="12" height="12" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+    <text x="128" y="11" class="n">operation</text>
+    <rect x="210" y="0" width="12" height="12" rx="3" fill="#52514e" fill-opacity="0.08" stroke="#52514e" stroke-width="1.5"/>
+    <text x="228" y="11" class="n">change feed</text>
+    <rect x="320" y="0" width="12" height="12" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+    <text x="338" y="11" class="n">delete</text>
+  </g>
+</svg>

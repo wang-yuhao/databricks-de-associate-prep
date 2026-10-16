@@ -1,0 +1,11 @@
+# SOLUTION - Lab 4.3
+bundle:
+  name: my_first_bundle
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true

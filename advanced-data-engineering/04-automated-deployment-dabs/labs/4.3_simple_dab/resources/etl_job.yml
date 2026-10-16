@@ -1,0 +1,7 @@
+# TODO 2: define a job with resource key "etl_job" and name "etl_job" containing two notebook tasks:
+#           - task_key "ingest"    -> ../src/ingest.py
+#           - task_key "transform" -> ../src/transform.py, runs only after "ingest" succeeded
+# TODO 3: give the job a job-level parameter "run_date" (default "") so both notebooks receive it.
+#         Hint: `parameters:` under the job, each with `name` and `default`.
+resources:
+  jobs: {}

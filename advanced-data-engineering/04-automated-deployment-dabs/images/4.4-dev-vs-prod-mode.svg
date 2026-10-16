@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="399" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .dev{fill:#6250d6;fill-opacity:0.12;stroke:#6250d6;stroke-width:1.5}
+      .prd{fill:#eb6834;fill-opacity:0.12;stroke:#eb6834;stroke-width:1.5}
+      .row{stroke:#e4e2dc;stroke-width:1}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">mode: development vs. mode: production</text>
+
+  <rect x="250" y="56" width="330" height="290" rx="8" class="dev"/>
+  <rect x="600" y="56" width="330" height="290" rx="8" class="prd"/>
+  <text x="266" y="82" class="b">mode: development</text>
+  <text x="266" y="100" class="n">your personal dev target</text>
+  <text x="616" y="82" class="b">mode: production</text>
+  <text x="616" y="100" class="n">stage and prod targets</text>
+
+  <g class="row">
+    <line x1="30" y1="114" x2="930" y2="114"/>
+    <line x1="30" y1="152" x2="930" y2="152"/>
+    <line x1="30" y1="190" x2="930" y2="190"/>
+    <line x1="30" y1="228" x2="930" y2="228"/>
+    <line x1="30" y1="266" x2="930" y2="266"/>
+    <line x1="30" y1="304" x2="930" y2="304"/>
+  </g>
+
+  <g class="b">
+    <text x="30" y="138">Resource names</text>
+    <text x="30" y="176">Schedules, triggers</text>
+    <text x="30" y="214">Pipelines</text>
+    <text x="30" y="252">Files and state</text>
+    <text x="30" y="290">Runs as</text>
+    <text x="30" y="328">Checks</text>
+  </g>
+  <g class="l">
+    <text x="266" y="138">prefixed [dev &lt;you&gt;], tagged dev</text>
+    <text x="266" y="176">paused</text>
+    <text x="266" y="214">development: true</text>
+    <text x="266" y="252">/Workspace/Users/&lt;you&gt;/.bundle/...</text>
+    <text x="266" y="290">you</text>
+    <text x="266" y="328">concurrent runs, no deploy lock</text>
+
+    <text x="616" y="138">exactly as written</text>
+    <text x="616" y="176">active as defined</text>
+    <text x="616" y="214">must not be in development mode</text>
+    <text x="616" y="252">shared root_path, e.g. /Workspace/Shared</text>
+    <text x="616" y="290">a service principal (run_as) recommended</text>
+    <text x="616" y="328">stricter validation before deploy</text>
+  </g>
+  <text x="30" y="376" class="n">Purple = dev target · orange = production-mode targets (stage uses the same mode). The mode changes behavior, variables change values.</text>
+</svg>

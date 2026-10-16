@@ -1,9 +1,0 @@
-# Delta Lake 3.2.x is built against Spark 3.5.x -- keep these two in lockstep.
-pyspark==3.5.3
-delta-spark==3.2.1
-pytest==8.3.3
-
-# Notebook lab environment (Databricks-like workspace)
-jupyterlab==4.2.5
-pandas==2.2.3
-numpy==1.26.4          # PySpark 3.5 toPandas() is most reliable on NumPy 1.x

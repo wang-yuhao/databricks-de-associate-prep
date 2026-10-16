@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="File layout with Hive-style partitioning compared to Liquid Clustering, and changing clustering keys without a rewrite">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .h{font-size:14px;font-weight:600}
+    .l{font-size:13px}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .old{fill:#6250d6;fill-opacity:.05;stroke:#6250d6;stroke-width:1.5;stroke-dasharray:4 3}
+    .meta{fill:#52514e;fill-opacity:.08;stroke:#52514e;stroke-width:1.5}
+    .panel{fill:none;stroke:#e4e2dc;stroke-width:1.5}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="430" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Partitioning vs Liquid Clustering: how silver_events is laid out on disk</text>
+
+  <!-- left panel: partitioning -->
+  <rect class="panel" x="24" y="56" width="444" height="334" rx="8"/>
+  <text class="h" x="40" y="84">Hive-style partitioning</text>
+  <text class="n" x="40" y="103">PARTITIONED BY (status): one folder per value</text>
+
+  <rect class="meta" x="40" y="124" width="150" height="48" rx="8"/>
+  <text class="l m" x="115" y="153">status=ACTIVE/</text>
+  <rect class="slv" x="206" y="126" width="56" height="44" rx="4"/>
+  <rect class="slv" x="272" y="126" width="56" height="44" rx="4"/>
+  <rect class="slv" x="338" y="126" width="56" height="44" rx="4"/>
+  <rect class="slv" x="404" y="126" width="48" height="44" rx="4"/>
+
+  <rect class="meta" x="40" y="188" width="150" height="48" rx="8"/>
+  <text class="l m" x="115" y="217">status=ERROR/</text>
+  <rect class="slv" x="206" y="204" width="16" height="16" rx="2"/>
+  <rect class="slv" x="228" y="204" width="16" height="16" rx="2"/>
+  <rect class="slv" x="250" y="204" width="16" height="16" rx="2"/>
+  <rect class="slv" x="272" y="204" width="16" height="16" rx="2"/>
+  <rect class="slv" x="294" y="204" width="16" height="16" rx="2"/>
+  <rect class="slv" x="316" y="204" width="16" height="16" rx="2"/>
+  <text class="n" x="342" y="217">many tiny files</text>
+
+  <rect class="meta" x="40" y="252" width="150" height="48" rx="8"/>
+  <text class="l m" x="115" y="281">status=PENDING/</text>
+  <rect class="slv" x="206" y="258" width="36" height="36" rx="4"/>
+  <rect class="slv" x="250" y="258" width="36" height="36" rx="4"/>
+
+  <text class="n" x="40" y="338">The key is fixed when the table is created.</text>
+  <text class="n" x="40" y="356">Changing it means rewriting every file.</text>
+  <text class="n" x="40" y="374">Skewed values give tiny or huge partitions.</text>
+
+  <!-- right panel: liquid clustering -->
+  <rect class="panel" x="492" y="56" width="444" height="334" rx="8"/>
+  <text class="h" x="508" y="84">Liquid Clustering</text>
+  <text class="n" x="508" y="103">cluster_by=["status", "ingest_date"]: no folders, files keep min/max stats</text>
+
+  <text class="n" x="508" y="130">After OPTIMIZE: similar-sized files, each with a narrow key range</text>
+  <rect class="slv" x="508" y="142" width="76" height="50" rx="4"/>
+  <text class="n m" x="546" y="163">ACTIVE</text><text class="n m" x="546" y="181">day 1-2</text>
+  <rect class="slv" x="592" y="142" width="76" height="50" rx="4"/>
+  <text class="n m" x="630" y="163">ACTIVE</text><text class="n m" x="630" y="181">day 3-4</text>
+  <rect class="slv" x="676" y="142" width="76" height="50" rx="4"/>
+  <text class="n m" x="714" y="163">ERROR</text><text class="n m" x="714" y="181">day 1-4</text>
+  <rect class="slv" x="760" y="142" width="76" height="50" rx="4"/>
+  <text class="n m" x="798" y="163">INACTIVE</text><text class="n m" x="798" y="181">day 1-4</text>
+  <rect class="slv" x="844" y="142" width="76" height="50" rx="4"/>
+  <text class="n m" x="882" y="163">PENDING</text><text class="n m" x="882" y="181">day 1-4</text>
+
+  <path class="a" d="M546,200 V240"/>
+  <text class="l" x="560" y="225">change the keys: cluster_by=["device_id"]</text>
+
+  <text class="n" x="508" y="262">Old files stay valid; new and re-optimized data use the new keys</text>
+  <rect class="old" x="508" y="274" width="76" height="50" rx="4"/>
+  <text class="n m" x="546" y="295">ACTIVE</text><text class="n m" x="546" y="313">day 1-2</text>
+  <rect class="old" x="592" y="274" width="76" height="50" rx="4"/>
+  <text class="n m" x="630" y="295">ERROR</text><text class="n m" x="630" y="313">day 1-4</text>
+  <rect class="old" x="676" y="274" width="76" height="50" rx="4"/>
+  <text class="n m" x="714" y="295">PENDING</text><text class="n m" x="714" y="313">day 1-4</text>
+  <rect class="slv" x="760" y="274" width="76" height="50" rx="4"/>
+  <text class="n m" x="798" y="295">device</text><text class="n m" x="798" y="313">001-050</text>
+  <rect class="slv" x="844" y="274" width="76" height="50" rx="4"/>
+  <text class="n m" x="882" y="295">device</text><text class="n m" x="882" y="313">051-099</text>
+
+  <rect class="old" x="508" y="344" width="14" height="14" rx="2"/><text class="n" x="528" y="356">file written with the old keys</text>
+  <rect class="slv" x="724" y="344" width="14" height="14" rx="2"/><text class="n" x="744" y="356">file clustered by the new keys</text>
+  <text class="n" x="508" y="380">No rewrite needed. Pipeline tables are optimized automatically on Databricks.</text>
+
+  <text class="n" x="24" y="414">Purple rectangles are Parquet data files of silver_events; gray boxes are partition folders.</text>
+</svg>

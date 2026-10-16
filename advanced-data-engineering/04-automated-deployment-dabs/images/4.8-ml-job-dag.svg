@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="439" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .src{fill:#2a78d6;fill-opacity:0.12;stroke:#2a78d6;stroke-width:1.5}
+      .cfg{fill:#52514e;fill-opacity:0.1;stroke:#52514e;stroke-width:1.5}
+      .opt{fill:#52514e;fill-opacity:0.05;stroke:#52514e;stroke-width:1.5;stroke-dasharray:5 4}
+      .dev{fill:#6250d6;fill-opacity:0.06;stroke:#6250d6;stroke-width:1.5}
+    </style>
+  </defs>
+  <text x="30" y="36" class="t">orders_ml_job: train only after the engineering task has rebuilt the data</text>
+
+  <rect x="30" y="56" width="660" height="270" rx="8" class="dev"/>
+  <text x="44" y="78" class="b">Job orders_ml_job · serverless · target dev</text>
+
+  <!-- environments -->
+  <rect x="60" y="96" width="250" height="56" rx="8" class="opt"/>
+  <text x="74" y="118" class="b">environment "default"</text>
+  <text x="74" y="138" class="l">dependencies: ../dist/*.whl</text>
+
+  <rect x="400" y="96" width="260" height="56" rx="8" class="opt"/>
+  <text x="414" y="118" class="b">environment "ml"</text>
+  <text x="414" y="138" class="l">dependencies: scikit-learn, mlflow</text>
+
+  <!-- tasks -->
+  <rect x="60" y="196" width="250" height="100" rx="8" class="src"/>
+  <text x="74" y="220" class="b">build_daily_summary</text>
+  <text x="74" y="242" class="l">python_wheel_task</text>
+  <text x="74" y="259" class="l">orders_lib → daily_summary</text>
+  <text x="74" y="280" class="n">--catalog --schema from ${var.*}</text>
+
+  <rect x="400" y="196" width="260" height="100" rx="8" class="src"/>
+  <text x="414" y="220" class="b">train_revenue_model</text>
+  <text x="414" y="242" class="l">spark_python_task</text>
+  <text x="414" y="259" class="l">src/ml/train_revenue_model.py</text>
+  <text x="414" y="280" class="n">fits a model, logs it with MLflow</text>
+
+  <line x1="185" y1="152" x2="185" y2="194" class="ar" stroke-dasharray="5 4"/>
+  <text x="193" y="178" class="n">environment_key</text>
+  <line x1="530" y1="152" x2="530" y2="194" class="ar" stroke-dasharray="5 4"/>
+  <text x="538" y="178" class="n">environment_key</text>
+
+  <line x1="310" y1="246" x2="398" y2="246" class="ar"/>
+  <text x="354" y="238" class="n" text-anchor="middle">depends_on</text>
+
+  <!-- data -->
+  <rect x="200" y="360" width="320" height="56" rx="8" class="cfg"/>
+  <text x="214" y="382" class="b">table daily_summary</text>
+  <text x="214" y="402" class="l">workspace.orders_cicd_dev.daily_summary</text>
+  <line x1="185" y1="296" x2="250" y2="358" class="ar"/>
+  <text x="196" y="336" class="n" text-anchor="end">writes</text>
+  <line x1="460" y1="358" x2="520" y2="298" class="ar"/>
+  <text x="500" y="336" class="n">reads</text>
+
+  <!-- model -->
+  <rect x="730" y="196" width="200" height="100" rx="8" class="cfg"/>
+  <text x="744" y="220" class="b">Unity Catalog model</text>
+  <text x="744" y="242" class="l">workspace.orders_cicd_dev</text>
+  <text x="744" y="259" class="l">.revenue_model</text>
+  <text x="744" y="280" class="n">a new version per run</text>
+  <line x1="660" y1="246" x2="728" y2="246" class="ar"/>
+  <text x="694" y="238" class="n" text-anchor="middle">registers</text>
+
+  <text x="560" y="372" class="n">Blue = task code · dashed = environment</text>
+  <text x="560" y="390" class="n">spec · grey = data in Unity Catalog.</text>
+  <text x="560" y="408" class="n">A notebook task can't take environment_key.</text>
+</svg>

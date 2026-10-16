@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="399" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .ard{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a);stroke-dasharray:5 4}
+    </style>
+  </defs>
+  <text x="28" y="36" class="t">Spill: execution memory runs out, data goes to local disk</text>
+  <text x="264" y="80" class="n">partition to process: window buffer for customer 0 (600 k rows)</text>
+  <rect x="264" y="90" width="316" height="34" rx="4" fill="#2a78d6" fill-opacity="0.35" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="422" y="112" class="l" text-anchor="middle">fits in memory</text>
+  <rect x="580" y="90" width="200" height="34" rx="4" fill="#e34948" fill-opacity="0.35" stroke="#e34948" stroke-width="1.5"/>
+  <text x="680" y="112" class="l" text-anchor="middle">does not fit</text>
+  <rect x="24" y="150" width="590" height="150" rx="8" fill="#1baf7a" fill-opacity="0.06" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="40" y="174" class="b">Executor memory (unified)</text>
+  <rect x="44" y="200" width="210" height="60" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="149.0" y="225.0" class="b" text-anchor="middle">storage</text>
+  <text x="149.0" y="244.0" class="l" text-anchor="middle">cache()</text>
+  <rect x="264" y="200" width="330" height="60" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="429.0" y="225.0" class="b" text-anchor="middle">execution</text>
+  <text x="429.0" y="244.0" class="l" text-anchor="middle">joins, sorts, aggregations, windows</text>
+  <path d="M422,124 L422,198" class="ar"/>
+  <path d="M680,124 L680,198" class="ar"/>
+  <rect x="660" y="200" width="276" height="100" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="798.0" y="229.5" class="b" text-anchor="middle">local disk (spill)</text>
+  <text x="798.0" y="248.5" class="n" text-anchor="middle">serialize → write → read back</text>
+  <text x="798.0" y="264.5" class="n" text-anchor="middle">UI: Spill (memory) / Spill (disk),</text>
+  <text x="798.0" y="280.5" class="n" text-anchor="middle">perf: spill_bytes</text>
+  <path d="M660,280 L596,250" class="ar"/>
+  <text x="24" y="334" class="n">Fixes, best first: change the logic (skip or pre-aggregate the hot key) · smaller partitions</text>
+  <text x="24" y="352" class="n">(does not help when ONE key is too big) · more memory per core (memory-optimized instances).</text>
+  <rect x="24" y="373" width="16" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="384" class="n">data</text>
+  <rect x="96.4" y="373" width="16" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="118.4" y="384" class="n">executor memory</text>
+  <rect x="241.4" y="373" width="16" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="263.4" y="384" class="n">spill</text>
+</svg>

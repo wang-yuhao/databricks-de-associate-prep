@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="What warn, drop and fail expectations do to a bronze_events row that breaks a rule">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:14px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .brz{fill:#eb6834;fill-opacity:.12;stroke:#eb6834;stroke-width:1.5}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .meta{fill:#52514e;fill-opacity:.08;stroke:#52514e;stroke-width:1.5}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+    .d{fill:none;stroke:#52514e;stroke-width:1.5;stroke-dasharray:4 4;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="380" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">What each expectation action does to a row that breaks its rule</text>
+
+  <text class="n m" x="353" y="68">Rule on silver_events</text>
+  <text class="n m" x="620" y="68">Effect on the row</text>
+  <text class="n m" x="853" y="68">Recorded in</text>
+
+  <!-- input row -->
+  <rect class="brz" x="24" y="170" width="150" height="60" rx="8"/>
+  <text class="b m" x="99" y="196">bronze_events</text>
+  <text class="n m" x="99" y="215">one incoming row</text>
+  <path class="a" d="M174,200 H204 V110 H236"/>
+  <path class="a" d="M174,200 H236"/>
+  <path class="a" d="M174,200 H204 V290 H236"/>
+
+  <!-- warn lane -->
+  <rect class="flw" x="238" y="80" width="230" height="60" rx="8"/>
+  <text class="b m" x="353" y="106">expect (warn)</text>
+  <text class="n m" x="353" y="126">non_negative_amount</text>
+  <path class="a" d="M468,110 H508"/>
+  <rect class="slv" x="510" y="80" width="220" height="60" rx="8"/>
+  <text class="b m" x="620" y="106">Kept in silver_events</text>
+  <text class="n m" x="620" y="126">the violation is only counted</text>
+  <path class="d" d="M730,110 H768"/>
+  <rect class="meta" x="770" y="80" width="166" height="60" rx="8"/>
+  <text class="b m" x="853" y="106">Event log</text>
+  <text class="n m" x="853" y="126">passed / failed records</text>
+
+  <!-- drop lane -->
+  <rect class="flw" x="238" y="170" width="230" height="60" rx="8"/>
+  <text class="b m" x="353" y="196">expect_or_drop</text>
+  <text class="n m" x="353" y="216">valid_timestamp, valid_status</text>
+  <path class="a" d="M468,200 H508"/>
+  <rect class="bad" x="510" y="170" width="220" height="60" rx="8"/>
+  <text class="b m" x="620" y="196">Dropped from silver_events</text>
+  <text class="n m" x="620" y="216">silver_quarantine keeps a copy</text>
+  <path class="d" d="M730,200 H768"/>
+  <rect class="meta" x="770" y="170" width="166" height="60" rx="8"/>
+  <text class="b m" x="853" y="196">Event log</text>
+  <text class="n m" x="853" y="216">passed / failed records</text>
+
+  <!-- fail lane -->
+  <rect class="flw" x="238" y="260" width="230" height="60" rx="8"/>
+  <text class="b m" x="353" y="286">expect_or_fail</text>
+  <text class="n m" x="353" y="306">valid_event_id</text>
+  <path class="a" d="M468,290 H508"/>
+  <rect class="bad" x="510" y="260" width="220" height="60" rx="8"/>
+  <text class="b m" x="620" y="286">Update stops</text>
+  <text class="n m" x="620" y="306">micro-batch is not committed</text>
+  <path class="d" d="M730,290 H768"/>
+  <rect class="meta" x="770" y="260" width="166" height="60" rx="8"/>
+  <text class="b m" x="853" y="286">Event log</text>
+  <text class="n m" x="853" y="306">ERROR event, flow failed</text>
+
+  <text class="n" x="24" y="354">A row that passes every rule reaches silver_events unchanged. Expectations belong to datasets, never to an append flow.</text>
+</svg>

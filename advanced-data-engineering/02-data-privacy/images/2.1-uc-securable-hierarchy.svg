@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Unity Catalog securable hierarchy with privileges granted to the analysts group">
+  <rect x="0.75" y="0.75" width="958.5" height="518.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+  </style>
+  <text x="24" y="36" class="t">Unity Catalog: securables and inherited privileges</text>
+  <text x="24" y="58" class="n">To read an object a user needs a privilege at every level of its path. A grant on a parent covers all of its children.</text>
+
+  <!-- securable tree (gray = securable / metadata) -->
+  <rect x="40" y="80" width="220" height="48" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="56" y="101" class="h">Metastore</text>
+  <text x="56" y="119" class="n">top-level container, one per region</text>
+
+  <rect x="90" y="156" width="220" height="48" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="106" y="177" class="h">Catalog: shop</text>
+  <text x="106" y="195" class="n">domain, environment or region</text>
+
+  <rect x="140" y="232" width="220" height="48" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="156" y="253" class="h">Schema: shop.crm</text>
+  <text x="156" y="271" class="n">groups related objects</text>
+
+  <path d="M60,128 V180 H88" class="ln" marker-end="url(#arr)"/>
+  <path d="M110,204 V256 H138" class="ln" marker-end="url(#arr)"/>
+  <path d="M250,280 V300 M102,300 H513" class="ln"/>
+  <path d="M102,300 V318" class="ln" marker-end="url(#arr)"/>
+  <path d="M239,300 V318" class="ln" marker-end="url(#arr)"/>
+  <path d="M376,300 V318" class="ln" marker-end="url(#arr)"/>
+  <path d="M513,300 V318" class="ln" marker-end="url(#arr)"/>
+
+  <rect x="40" y="320" width="125" height="56" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="54" y="343" class="h">Table</text>
+  <text x="54" y="362" class="n">customers</text>
+  <rect x="177" y="320" width="125" height="56" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="191" y="343" class="h">Volume</text>
+  <text x="191" y="362" class="n">raw files</text>
+  <rect x="314" y="320" width="125" height="56" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="328" y="343" class="h">Function</text>
+  <text x="328" y="362" class="n">mask_email</text>
+  <rect x="451" y="320" width="125" height="56" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="465" y="343" class="h">View</text>
+  <text x="465" y="362" class="n">customers_secure</text>
+
+  <rect x="40" y="388" width="125" height="28" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="102.5" y="407" class="n" text-anchor="middle" style="fill:#0b0b0b">no SELECT grant</text>
+
+  <!-- grantee and grants -->
+  <rect x="640" y="80" width="280" height="48" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="656" y="101" class="h">Group: analysts</text>
+  <text x="656" y="119" class="n">the grantee (never an individual user)</text>
+
+  <rect x="640" y="156" width="280" height="48" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="656" y="177" class="h">GRANT USE CATALOG</text>
+  <text x="656" y="195" class="n">on shop: may enter the catalog</text>
+  <rect x="640" y="232" width="280" height="48" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="656" y="253" class="h">GRANT USE SCHEMA</text>
+  <text x="656" y="271" class="n">on shop.crm: may enter the schema</text>
+  <rect x="640" y="320" width="280" height="56" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="656" y="343" class="h">GRANT SELECT</text>
+  <text x="656" y="362" class="n">on the view only, not the base table</text>
+
+  <path d="M920,104 H940 V348 H922" class="ln" marker-end="url(#arr)"/>
+  <path d="M940,180 H922" class="ln" marker-end="url(#arr)"/>
+  <path d="M940,256 H922" class="ln" marker-end="url(#arr)"/>
+
+  <path d="M640,180 H312" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <path d="M640,256 H362" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <path d="M640,348 H578" class="ln" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+  <text x="40" y="446" class="n">Privileges flow down: SELECT on shop.crm would cover every table and view in the schema, including future ones.</text>
+  <text x="40" y="464" class="n">The view reads the base table with its owner's rights, so analysts see only what the view (and its policy functions) returns.</text>
+
+  <!-- legend -->
+  <rect x="40" y="488" width="14" height="14" rx="3" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="62" y="500" class="n">securable</text>
+  <rect x="150" y="488" width="14" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="172" y="500" class="n">group (users)</text>
+  <rect x="280" y="488" width="14" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="302" y="500" class="n">privilege (policy)</text>
+  <rect x="420" y="488" width="14" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="442" y="500" class="n">restricted</text>
+  <line x1="530" y1="495" x2="566" y2="495" class="ln" stroke-dasharray="5 4"/>
+  <text x="574" y="500" class="n">applies to</text>
+</svg>

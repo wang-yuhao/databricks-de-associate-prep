@@ -1,0 +1,12 @@
+resources:
+  jobs:
+    hello_job:
+      name: hello_job
+      description: First job deployed with a Declarative Automation Bundle.
+      tasks:
+        - task_key: say_hello
+          # No cluster definition: the task runs on serverless jobs compute.
+          notebook_task:
+            notebook_path: ../src/hello.py
+            base_parameters:
+              greeting: Hello from a bundle

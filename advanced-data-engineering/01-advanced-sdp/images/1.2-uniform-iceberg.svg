@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="UniForm: silver_orders keeps one set of Parquet files with both a Delta log and Iceberg metadata, read by Spark as Delta and by an Iceberg engine as Iceberg">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .meta{fill:#52514e;fill-opacity:.08;stroke:#52514e;stroke-width:1.5}
+    .grp{fill:none;stroke:#52514e;stroke-width:1.5;stroke-dasharray:5 4}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+    .d{fill:none;stroke:#52514e;stroke-width:1.5;stroke-dasharray:4 4;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="400" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">UniForm: one copy of the data, two table formats</text>
+
+  <!-- table location -->
+  <rect class="grp" x="250" y="60" width="460" height="262" rx="10"/>
+  <text class="b" x="266" y="84">silver_orders table location</text>
+
+  <rect class="meta" x="270" y="104" width="200" height="64" rx="8"/>
+  <text class="b m" x="370" y="130">_delta_log/</text>
+  <text class="n m" x="370" y="150">Delta commits (JSON)</text>
+  <rect class="meta" x="490" y="104" width="200" height="64" rx="8"/>
+  <text class="b m" x="590" y="130">metadata/</text>
+  <text class="n m" x="590" y="150">Iceberg snapshots + manifests</text>
+
+  <path class="d" d="M370,168 V230"/>
+  <path class="d" d="M590,168 V230"/>
+  <text class="n m" x="480" y="206">both point to the same files</text>
+
+  <text class="n" x="285" y="248">Parquet data files (written once, shared)</text>
+  <rect class="slv" x="285" y="258" width="70" height="46" rx="4"/>
+  <rect class="slv" x="365" y="258" width="70" height="46" rx="4"/>
+  <rect class="slv" x="445" y="258" width="70" height="46" rx="4"/>
+  <rect class="slv" x="525" y="258" width="70" height="46" rx="4"/>
+  <rect class="slv" x="605" y="258" width="70" height="46" rx="4"/>
+
+  <!-- readers -->
+  <rect class="flw" x="24" y="104" width="200" height="64" rx="8"/>
+  <text class="b m" x="124" y="130">Spark / Databricks</text>
+  <text class="n m" x="124" y="150">reads it as Delta</text>
+  <path class="a" d="M224,136 H268"/>
+
+  <rect class="flw" x="736" y="104" width="200" height="64" rx="8"/>
+  <text class="b m" x="836" y="130">Iceberg engine</text>
+  <text class="n m" x="836" y="150">PyIceberg, Snowflake, Trino</text>
+  <path class="a" d="M736,136 H692"/>
+
+  <!-- writer -->
+  <rect class="flw" x="24" y="246" width="200" height="64" rx="8"/>
+  <text class="b m" x="124" y="272">Pipeline update</text>
+  <text class="n m" x="124" y="292">one Delta commit</text>
+  <path class="a" d="M224,280 H283"/>
+  <text class="n" x="736" y="262">Each commit also writes</text>
+  <text class="n" x="736" y="279">Iceberg metadata, so the</text>
+  <text class="n" x="736" y="296">Iceberg view stays current.</text>
+
+  <text class="n" x="24" y="352">Table properties: delta.enableIcebergCompatV2 = true, delta.universalFormat.enabledFormats = 'iceberg'.</text>
+  <text class="n" x="24" y="372">Requirements: deletion vectors off, column mapping on (set automatically). On Databricks, Iceberg clients use the Unity Catalog Iceberg REST catalog.</text>
+</svg>

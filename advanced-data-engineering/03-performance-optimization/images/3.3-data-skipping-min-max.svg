@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 556" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="959" height="555" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+    <style>
+      .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+      .b{font-size:14px;font-weight:600;fill:#0b0b0b}
+      .l{font-size:13px;fill:#0b0b0b}
+      .n{font-size:12px;fill:#52514e}
+      .ar{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .ard{stroke:#52514e;stroke-width:1.5;fill:none;marker-end:url(#a);stroke-dasharray:5 4}
+    </style>
+  </defs>
+  <text x="28" y="36" class="t">Data skipping: per-file min/max of customer_id decides what is read</text>
+  <text x="24" y="68" class="b">Random layout (tx_random): every file covers almost the whole range</text>
+  <text x="24" y="86" class="n">every [min, max] contains 4,200–4,300 → no file can be skipped → read 8 of 8</text>
+  <text x="190" y="122" class="n" text-anchor="end">file 1</text>
+  <rect x="201.6" y="112" width="635.9" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="122" class="l">read</text>
+  <text x="190" y="139" class="n" text-anchor="end">file 2</text>
+  <rect x="203.6" y="129" width="630.9" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="139" class="l">read</text>
+  <text x="190" y="156" class="n" text-anchor="end">file 3</text>
+  <rect x="202.4" y="146" width="637.2" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="156" class="l">read</text>
+  <text x="190" y="173" class="n" text-anchor="end">file 4</text>
+  <rect x="204.0" y="163" width="632.7" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="173" class="l">read</text>
+  <text x="190" y="190" class="n" text-anchor="end">file 5</text>
+  <rect x="204.1" y="180" width="633.3" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="190" class="l">read</text>
+  <text x="190" y="207" class="n" text-anchor="end">file 6</text>
+  <rect x="200.4" y="197" width="637.1" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="207" class="l">read</text>
+  <text x="190" y="224" class="n" text-anchor="end">file 7</text>
+  <rect x="200.1" y="214" width="639.5" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="224" class="l">read</text>
+  <text x="190" y="241" class="n" text-anchor="end">file 8</text>
+  <rect x="205.5" y="231" width="631.2" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="241" class="l">read</text>
+  <line x1="227.2" y1="108" x2="227.2" y2="250" stroke="#0b0b0b" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <line x1="200" y1="254" x2="840" y2="254" stroke="#c8c6bf" stroke-width="1"/>
+  <text x="200" y="270" class="n" text-anchor="middle">0</text>
+  <text x="520" y="270" class="n" text-anchor="middle">50,000</text>
+  <text x="840" y="270" class="n" text-anchor="middle">100,000</text>
+  <text x="233" y="106" class="n">query: customer_id BETWEEN 4200 AND 4300</text>
+  <text x="24" y="298" class="b">Clustered layout (Z-ORDER / Liquid Clustering on customer_id): ranges are disjoint</text>
+  <text x="24" y="316" class="n">only the file whose range contains 4,200–4,300 is read → read 1 of 8</text>
+  <text x="190" y="352" class="n" text-anchor="end">file 1</text>
+  <rect x="200.0" y="342" width="80.0" height="12" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="870" y="352" class="l">read</text>
+  <text x="190" y="369" class="n" text-anchor="end">file 2</text>
+  <rect x="280.0" y="359" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="369" class="n">skipped</text>
+  <text x="190" y="386" class="n" text-anchor="end">file 3</text>
+  <rect x="360.0" y="376" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="386" class="n">skipped</text>
+  <text x="190" y="403" class="n" text-anchor="end">file 4</text>
+  <rect x="440.0" y="393" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="403" class="n">skipped</text>
+  <text x="190" y="420" class="n" text-anchor="end">file 5</text>
+  <rect x="520.0" y="410" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="420" class="n">skipped</text>
+  <text x="190" y="437" class="n" text-anchor="end">file 6</text>
+  <rect x="600.0" y="427" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="437" class="n">skipped</text>
+  <text x="190" y="454" class="n" text-anchor="end">file 7</text>
+  <rect x="680.0" y="444" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="454" class="n">skipped</text>
+  <text x="190" y="471" class="n" text-anchor="end">file 8</text>
+  <rect x="760.0" y="461" width="80.0" height="12" rx="3" fill="#2a78d6" fill-opacity="0.06" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="870" y="471" class="n">skipped</text>
+  <line x1="227.2" y1="338" x2="227.2" y2="480" stroke="#0b0b0b" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <line x1="200" y1="484" x2="840" y2="484" stroke="#c8c6bf" stroke-width="1"/>
+  <text x="200" y="500" class="n" text-anchor="middle">0</text>
+  <text x="520" y="500" class="n" text-anchor="middle">50,000</text>
+  <text x="840" y="500" class="n" text-anchor="middle">100,000</text>
+  <text x="233" y="336" class="n">query: customer_id BETWEEN 4200 AND 4300</text>
+  <rect x="24" y="529" width="16" height="14" rx="3" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="540" class="n">file range, read</text>
+  <rect x="175.6" y="529" width="16" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="197.6" y="540" class="n">file range, skipped by min/max</text>
+</svg>

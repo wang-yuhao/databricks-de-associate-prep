@@ -1,0 +1,52 @@
+# SOLUTION - Lab 4.5
+bundle:
+  name: orders_etl_lab
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds the schema (Free Edition default is "workspace").
+    default: workspace
+  schema:
+    description: Schema for all tables of this environment.
+  landing_volume:
+    description: Volume (in the schema) where raw files land.
+    default: landing
+  orders_per_run:
+    description: How many sample orders the generator lands per run.
+    default: 500
+  alert_email:
+    description: Who gets notified when the job fails.
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      schema: orders_dev
+      orders_per_run: 100
+      alert_email: you@example.com
+
+  stage:
+    # Production mode: no name prefix, schedules active, pipelines must not be in development mode,
+    # and deploying as a person (not a service principal) is checked: shared root_path, run_as, permissions.
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: orders_stage
+      alert_email: data-team@example.com
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: orders
+      orders_per_run: 1000
+      alert_email: oncall@example.com
+    permissions:
+      - group_name: users
+        level: CAN_VIEW

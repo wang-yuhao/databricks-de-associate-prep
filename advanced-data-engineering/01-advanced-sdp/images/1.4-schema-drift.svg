@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 384" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Schema drift: JSON orders with a new coupon field and a bad quantity value land in orders_bronze with the unexpected values kept in _rescued_data">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .c{white-space:pre;font-size:12px;font-family:Consolas, Menlo, monospace}
+    .m{text-anchor:middle}
+    .src{fill:#2a78d6;fill-opacity:.12;stroke:#2a78d6;stroke-width:1.5}
+    .brz{fill:#eb6834;fill-opacity:.12;stroke:#eb6834;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .meta{fill:#52514e;fill-opacity:.08;stroke:#52514e;stroke-width:1.5}
+    .hl{fill:#52514e;fill-opacity:.10}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+    .d{fill:none;stroke:#52514e;stroke-width:1.5;stroke-dasharray:4 4;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="384" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Schema drift: Auto Loader rescues what doesn't fit the schema</text>
+
+  <!-- incoming record -->
+  <rect class="src" x="24" y="64" width="250" height="150" rx="8"/>
+  <text class="b" x="40" y="88">Two batch 1 records (examples)</text>
+  <text class="c" x="40" y="114">{"orderId": "US-1-0003",</text>
+  <text class="c" x="40" y="132">  "quantity": 2,</text>
+  <rect class="hl" x="36" y="138" width="226" height="20" rx="3"/>
+  <text class="c" x="40" y="152">  "coupon": "FALL26", ...}</text>
+  <text class="c" x="40" y="178">{"orderId": "US-1-0007",</text>
+  <rect class="hl" x="36" y="184" width="226" height="20" rx="3"/>
+  <text class="c" x="40" y="198">  "quantity": "two", ...}</text>
+  <path class="a" d="M274,139 H306"/>
+
+  <!-- auto loader -->
+  <rect class="flw" x="308" y="84" width="196" height="110" rx="8"/>
+  <text class="b m" x="406" y="110">Auto Loader</text>
+  <text class="n m" x="406" y="130">schemaHints:</text>
+  <text class="n m" x="406" y="146">quantity INT, price DOUBLE</text>
+  <text class="n m" x="406" y="166">schemaEvolutionMode:</text>
+  <text class="n m" x="406" y="182">rescue</text>
+  <path class="a" d="M504,139 H536"/>
+
+  <!-- bronze row -->
+  <rect class="brz" x="538" y="64" width="398" height="150" rx="8"/>
+  <text class="b" x="554" y="88">The same rows in orders_bronze</text>
+  <text class="n" x="554" y="114">orderId</text><text class="n" x="660" y="114">quantity</text><text class="n" x="730" y="114">_rescued_data</text>
+  <text class="l" x="554" y="138">US-1-0003</text><text class="l" x="660" y="138">2</text>
+  <text class="c" x="730" y="138">{"coupon": "FALL26"}</text>
+  <text class="l" x="554" y="162">US-1-0007</text><text class="l" x="660" y="162">NULL</text>
+  <text class="c" x="730" y="162">{"quantity": "two"}</text>
+  <text class="n" x="554" y="186">Declared columns keep their types. Nothing is lost:</text>
+  <text class="n" x="554" y="203">the raw values wait in _rescued_data for repair.</text>
+
+  <!-- consequences -->
+  <path class="d" d="M650,214 V262"/>
+  <path class="a" d="M820,214 V262"/>
+  <rect class="meta" x="540" y="264" width="220" height="64" rx="8"/>
+  <text class="b m" x="650" y="290">warn: no_rescued_data</text>
+  <text class="n m" x="650" y="309">both rows counted and kept</text>
+  <rect class="bad" x="776" y="264" width="160" height="64" rx="8"/>
+  <text class="b m" x="856" y="290">orders_quarantine</text>
+  <text class="n m" x="856" y="309">US-1-0007 only</text>
+
+  <text class="n" x="24" y="256">Other modes: addNewColumns adds coupon as a</text>
+  <text class="n" x="24" y="290">none ignores new fields.</text>
+  <text class="n" x="24" y="273">column (the stream stops once, then restarts);</text>
+  <text class="n" x="24" y="362">positive_quantity (quantity IS NOT NULL AND quantity &gt; 0) is false for NULL, so US-1-0007 is quarantined instead of slipping through.</text>
+</svg>

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 450" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Multiplex pattern: one bronze_multiplex table fans out to one silver table per topic generated in a loop, a quarantine table for unparseable payloads, a Delta sink export and a gold view">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .src{fill:#2a78d6;fill-opacity:.12;stroke:#2a78d6;stroke-width:1.5}
+    .brz{fill:#eb6834;fill-opacity:.12;stroke:#eb6834;stroke-width:1.5}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .gld{fill:#eda100;fill-opacity:.14;stroke:#eda100;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .grp{fill:none;stroke:#52514e;stroke-width:1.5;stroke-dasharray:5 4}
+    .dash{stroke-dasharray:5 4}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="450" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Multiplex: one Bronze table for every topic, one Silver table per topic</text>
+
+  <!-- source -->
+  <rect class="src" x="24" y="160" width="134" height="80" rx="8"/>
+  <text class="b m" x="91" y="186">multiplex/</text>
+  <text class="n m" x="91" y="205">JSON files</text>
+  <text class="n m" x="91" y="222">topic, key, value</text>
+  <path class="a" d="M158,200 H186"/>
+
+  <!-- bronze -->
+  <rect class="brz" x="188" y="146" width="168" height="108" rx="8"/>
+  <text class="b m" x="272" y="174">bronze_multiplex</text>
+  <text class="n m" x="272" y="194">cluster_by: topic</text>
+  <text class="n m" x="272" y="212">value = raw JSON string</text>
+  <text class="n m" x="272" y="230">3 topics in one table</text>
+
+  <!-- loop group -->
+  <rect class="grp" x="394" y="58" width="228" height="250" rx="10"/>
+  <text class="n" x="408" y="80">for topic in TOPICS: define_topic_table()</text>
+
+  <rect class="slv" x="408" y="92" width="200" height="56" rx="8"/>
+  <text class="b m" x="508" y="116">silver_orders</text>
+  <text class="n m" x="508" y="135">from_json(value) · UniForm</text>
+  <rect class="slv" x="408" y="162" width="200" height="56" rx="8"/>
+  <text class="b m" x="508" y="186">silver_customers</text>
+  <text class="n m" x="508" y="205">from_json(value) · UniForm</text>
+  <rect class="slv" x="408" y="232" width="200" height="56" rx="8"/>
+  <text class="b m" x="508" y="256">silver_clickstream</text>
+  <text class="n m" x="508" y="275">from_json(value) · UniForm</text>
+
+  <path class="a" d="M356,200 H378 V120 H406"/>
+  <path class="a" d="M356,200 H406"/>
+  <path class="a" d="M378,200 V260 H406"/>
+
+  <!-- quarantine -->
+  <rect class="bad" x="398" y="334" width="220" height="60" rx="8"/>
+  <text class="b m" x="508" y="359">bronze_multiplex_quarantine</text>
+  <text class="n m" x="508" y="378">payloads that don't parse</text>
+  <path class="a" d="M272,254 V364 H396"/>
+
+  <!-- gold -->
+  <rect class="gld" x="772" y="96" width="164" height="76" rx="8"/>
+  <text class="b m" x="854" y="124">gold_orders_by_region</text>
+  <text class="n m" x="854" y="143">materialized view</text>
+  <text class="n m" x="854" y="160">orders joined to customers</text>
+  <path class="a" d="M608,120 H770"/>
+  <path class="a" d="M608,190 H690 V150 H770"/>
+
+  <!-- sink -->
+  <rect class="flw" x="636" y="232" width="110" height="56" rx="8"/>
+  <text class="b m" x="691" y="256">append flow</text>
+  <text class="n m" x="691" y="275">/cart, /checkout</text>
+  <path class="a" d="M608,260 H634"/>
+  <rect class="src dash" x="772" y="228" width="164" height="64" rx="8"/>
+  <text class="b m" x="854" y="252">clickstream_export</text>
+  <text class="n m" x="854" y="270">Delta sink: external path</text>
+  <text class="n m" x="854" y="285">outside the pipeline</text>
+  <path class="a" d="M746,260 H770"/>
+
+  <!-- legend -->
+  <g transform="translate(24,428)">
+    <rect class="src" x="0" y="-11" width="14" height="14" rx="3"/><text class="n" x="20" y="0">Files / external sink</text>
+    <rect class="brz" x="150" y="-11" width="14" height="14" rx="3"/><text class="n" x="170" y="0">Bronze</text>
+    <rect class="slv" x="234" y="-11" width="14" height="14" rx="3"/><text class="n" x="254" y="0">Silver</text>
+    <rect class="gld" x="314" y="-11" width="14" height="14" rx="3"/><text class="n" x="334" y="0">Gold</text>
+    <rect class="flw" x="388" y="-11" width="14" height="14" rx="3"/><text class="n" x="408" y="0">Flow</text>
+    <rect class="bad" x="462" y="-11" width="14" height="14" rx="3"/><text class="n" x="482" y="0">Quarantine</text>
+    <rect class="grp" x="568" y="-11" width="14" height="14" rx="3"/><text class="n" x="588" y="0">Generated in a Python loop</text>
+  </g>
+</svg>

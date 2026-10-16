@@ -1,0 +1,17 @@
+# SOLUTION - Lab 4.3
+resources:
+  jobs:
+    etl_job:
+      name: etl_job
+      parameters:
+        - name: run_date
+          default: ""
+      tasks:
+        - task_key: ingest
+          notebook_task:
+            notebook_path: ../src/ingest.py
+        - task_key: transform
+          depends_on:
+            - task_key: ingest
+          notebook_task:
+            notebook_path: ../src/transform.py

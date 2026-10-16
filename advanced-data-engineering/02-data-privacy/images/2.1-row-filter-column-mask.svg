@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="The same query run by four personas passes through a row filter and column masks and returns different rows and values">
+  <rect x="0.75" y="0.75" width="958.5" height="538.5" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <style>
+    .t{font-size:18px;font-weight:600;fill:#0b0b0b}
+    .h{font-size:14px;font-weight:600;fill:#0b0b0b}
+    .l{font-size:13px;fill:#0b0b0b}
+    .n{font-size:12px;fill:#52514e}
+    .ln{stroke:#52514e;stroke-width:1.5;fill:none}
+    .grid{stroke:#e4e2dc;stroke-width:1}
+  </style>
+  <text x="24" y="36" class="t">Same query, different users: row filter and column masks</text>
+  <text x="24" y="58" class="n">Policies run inside the query, as the querying user. Nobody can bypass them by writing a different SELECT.</text>
+
+  <!-- query + base table -->
+  <rect x="24" y="80" width="166" height="48" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="38" y="100" class="h">Same query for all</text>
+  <text x="38" y="118" class="n">SELECT * FROM customers</text>
+
+  <rect x="230" y="80" width="230" height="48" rx="8" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="246" y="100" class="h">customers (base table)</text>
+  <text x="246" y="118" class="n">all regions, raw PII</text>
+  <path d="M345,128 V144" class="ln" marker-end="url(#arr)"/>
+
+  <!-- personas -->
+  <g>
+    <rect x="24" y="146" width="166" height="64" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+    <text x="38" y="172" class="h">admin</text>
+    <text x="38" y="192" class="n">admins + all other groups</text>
+    <rect x="24" y="224" width="166" height="64" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+    <text x="38" y="250" class="h">dpo</text>
+    <text x="38" y="270" class="n">pii_readers + analysts</text>
+    <rect x="24" y="302" width="166" height="64" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+    <text x="38" y="328" class="h">eu_analyst</text>
+    <text x="38" y="348" class="n">eu_analysts</text>
+    <rect x="24" y="380" width="166" height="64" rx="8" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+    <text x="38" y="406" class="h">contractor</text>
+    <text x="38" y="426" class="n">no groups</text>
+  </g>
+  <path d="M190,178 H228" class="ln" marker-end="url(#arr)"/>
+  <path d="M190,256 H228" class="ln" marker-end="url(#arr)"/>
+  <path d="M190,334 H228" class="ln" marker-end="url(#arr)"/>
+  <path d="M190,412 H228" class="ln" marker-end="url(#arr)"/>
+
+  <!-- policy engine -->
+  <rect x="230" y="146" width="230" height="298" rx="8" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="246" y="172" class="h">Policies, per querying user</text>
+  <text x="246" y="210" class="l">Row filter</text>
+  <text x="246" y="228" class="n">region_filter(region)</text>
+  <text x="246" y="244" class="n">keeps only allowed rows</text>
+  <text x="246" y="282" class="l">Column masks</text>
+  <text x="246" y="300" class="n">mask_email · mask_ssn · mask_salary</text>
+  <text x="246" y="316" class="n">raw value or masked value</text>
+  <line x1="246" y1="360" x2="444" y2="360" class="grid"/>
+  <text x="246" y="386" class="n">both call</text>
+  <text x="246" y="404" class="l">is_account_group_member()</text>
+  <text x="246" y="422" class="n">on the querying user's groups</text>
+
+  <path d="M460,178 H498" class="ln" marker-end="url(#arr)"/>
+  <path d="M460,256 H498" class="ln" marker-end="url(#arr)"/>
+  <path d="M460,334 H498" class="ln" marker-end="url(#arr)"/>
+  <path d="M460,412 H498" class="ln" marker-end="url(#arr)"/>
+
+  <!-- results -->
+  <g>
+    <rect x="500" y="146" width="436" height="64" rx="8" fill="#52514e" fill-opacity="0.06" stroke="#52514e" stroke-width="1.5"/>
+    <text x="516" y="168" class="n">region</text><text x="600" y="168" class="n">email</text><text x="760" y="168" class="n">ssn</text><text x="864" y="168" class="n">salary</text>
+    <text x="516" y="194" class="l">EU + US</text><text x="600" y="194" class="l">ana@mail.com</text><text x="760" y="194" class="l">123-45-6789</text><text x="864" y="194" class="l">84,312</text>
+
+    <rect x="500" y="224" width="436" height="64" rx="8" fill="#52514e" fill-opacity="0.06" stroke="#52514e" stroke-width="1.5"/>
+    <text x="516" y="246" class="n">region</text><text x="600" y="246" class="n">email</text><text x="760" y="246" class="n">ssn</text><text x="864" y="246" class="n">salary</text>
+    <text x="516" y="272" class="l">EU + US</text><text x="600" y="272" class="l">ana@mail.com</text><text x="760" y="272" class="l">***-**-6789</text><text x="864" y="272" class="l">80,000</text>
+
+    <rect x="500" y="302" width="436" height="64" rx="8" fill="#52514e" fill-opacity="0.06" stroke="#52514e" stroke-width="1.5"/>
+    <text x="516" y="324" class="n">region</text><text x="600" y="324" class="n">email</text><text x="760" y="324" class="n">ssn</text><text x="864" y="324" class="n">salary</text>
+    <text x="516" y="350" class="l">EU only</text><text x="600" y="350" class="l">*****@mail.com</text><text x="760" y="350" class="l">***-**-6789</text><text x="864" y="350" class="l">80,000</text>
+
+    <rect x="500" y="380" width="436" height="64" rx="8" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+    <text x="516" y="406" class="h">0 rows</text>
+    <text x="516" y="426" class="n">the row filter rejects every row; no error, just an empty result</text>
+  </g>
+
+  <text x="24" y="474" class="n">us_analyst is the mirror image of eu_analyst: US rows only, masked PII. Salary is rounded to 10,000 for everyone except admins.</text>
+  <text x="24" y="492" class="n">Locally the policies run through the customers_secure view; on Databricks they are attached to the table with SET ROW FILTER / SET MASK.</text>
+
+  <rect x="24" y="510" width="14" height="14" rx="3" fill="#2a78d6" fill-opacity="0.12" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="522" class="n">user / query</text>
+  <rect x="150" y="510" width="14" height="14" rx="3" fill="#1baf7a" fill-opacity="0.12" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="172" y="522" class="n">policy</text>
+  <rect x="240" y="510" width="14" height="14" rx="3" fill="#52514e" fill-opacity="0.1" stroke="#52514e" stroke-width="1.5"/>
+  <text x="262" y="522" class="n">table / result</text>
+  <rect x="370" y="510" width="14" height="14" rx="3" fill="#e34948" fill-opacity="0.12" stroke="#e34948" stroke-width="1.5"/>
+  <text x="392" y="522" class="n">access denied</text>
+</svg>

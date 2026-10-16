@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+build/
+dist/
+
+# Virtual environments
+.venv/
+.venv*/
+
+# Local lab data (tables, checkpoints, landing files, downloaded jars)
+.lab-data/
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Databricks CLI / bundle state
+.databricks/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# stock-quant-project local data
+stock-quant-project/data/spark_tmp/
+
+# Personal screenshots of course slides (copyrighted, keep out of git)
+advanced-data-engineering/*/slides/

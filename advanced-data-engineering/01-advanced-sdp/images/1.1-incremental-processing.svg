@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Incremental updates: each append flow reads only files its checkpoint has not seen, and the new flow_c is added without a full refresh">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .l{font-size:13px}
+    .b{font-size:13px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .done{fill:#2a78d6;fill-opacity:.10;stroke:#2a78d6;stroke-width:1.2}
+    .new{fill:#2a78d6;fill-opacity:.45;stroke:#2a78d6;stroke-width:2}
+    .src{fill:#2a78d6;fill-opacity:.06;stroke:#2a78d6;stroke-width:1.5}
+    .brz{fill:#eb6834;fill-opacity:.12;stroke:#eb6834;stroke-width:1.5}
+    .slv{fill:#6250d6;fill-opacity:.12;stroke:#6250d6;stroke-width:1.5}
+    .gld{fill:#eda100;fill-opacity:.14;stroke:#eda100;stroke-width:1.5}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .dash{stroke-dasharray:5 4}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="420" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Incremental updates: only new files flow, and a new source needs no full refresh</text>
+
+  <text class="n" x="24" y="72">Landing zone files</text>
+  <text class="n m" x="402" y="72">Append flow + checkpoint</text>
+  <text class="n m" x="600" y="72">Bronze</text>
+  <text class="n m" x="755" y="72">Silver</text>
+  <text class="n m" x="888" y="72">Gold</text>
+
+  <!-- flow_a row -->
+  <rect class="src" x="24" y="88" width="276" height="56" rx="8"/>
+  <text class="b" x="36" y="121">source_flow_a/</text>
+  <rect class="done" x="146" y="102" width="22" height="28" rx="3"/>
+  <rect class="done" x="174" y="102" width="22" height="28" rx="3"/>
+  <rect class="done" x="202" y="102" width="22" height="28" rx="3"/>
+  <path class="a" d="M300,116 H326"/>
+  <rect class="flw" x="328" y="88" width="148" height="56" rx="8"/>
+  <text class="b m" x="402" y="112">flow_a</text>
+  <text class="n m" x="402" y="131">0 new rows</text>
+
+  <!-- flow_b row -->
+  <rect class="src" x="24" y="168" width="276" height="56" rx="8"/>
+  <text class="b" x="36" y="201">source_flow_b/</text>
+  <rect class="done" x="146" y="182" width="22" height="28" rx="3"/>
+  <rect class="done" x="174" y="182" width="22" height="28" rx="3"/>
+  <rect class="done" x="202" y="182" width="22" height="28" rx="3"/>
+  <rect class="new" x="230" y="182" width="22" height="28" rx="3"/>
+  <text class="n" x="260" y="201">new</text>
+  <path class="a" d="M300,196 H326"/>
+  <rect class="flw" x="328" y="168" width="148" height="56" rx="8"/>
+  <text class="b m" x="402" y="192">flow_b</text>
+  <text class="n m" x="402" y="211">reads 1 new file</text>
+
+  <!-- flow_c row (added later) -->
+  <rect class="src dash" x="24" y="248" width="276" height="56" rx="8"/>
+  <text class="b" x="36" y="281">source_flow_c/</text>
+  <rect class="new" x="146" y="262" width="22" height="28" rx="3"/>
+  <text class="n" x="176" y="281">new folder</text>
+  <path class="a" d="M300,276 H326"/>
+  <rect class="flw dash" x="328" y="248" width="148" height="56" rx="8"/>
+  <text class="b m" x="402" y="272">flow_c (added)</text>
+  <text class="n m" x="402" y="291">fresh checkpoint</text>
+
+  <!-- bronze -->
+  <rect class="brz" x="530" y="88" width="140" height="216" rx="8"/>
+  <text class="b m" x="600" y="186">bronze_events</text>
+  <text class="n m" x="600" y="206">appends new rows only</text>
+  <path class="a" d="M476,116 H528"/>
+  <path class="a" d="M476,196 H528"/>
+  <path class="a" d="M476,276 H528"/>
+
+  <!-- silver / gold -->
+  <rect class="slv" x="700" y="160" width="110" height="72" rx="8"/>
+  <text class="b m" x="755" y="186">silver_events</text>
+  <text class="n m" x="755" y="205">new Bronze</text>
+  <text class="n m" x="755" y="221">rows only</text>
+  <path class="a" d="M670,196 H698"/>
+  <rect class="gld" x="840" y="160" width="96" height="72" rx="8"/>
+  <text class="b m" x="888" y="186">gold_daily_</text>
+  <text class="b m" x="888" y="202">metrics</text>
+  <text class="n m" x="888" y="221">recomputed</text>
+  <path class="a" d="M810,196 H838"/>
+
+  <!-- legend + notes -->
+  <rect class="done" x="24" y="324" width="14" height="18" rx="2"/><text class="n" x="44" y="338">already in the flow's checkpoint (skipped)</text>
+  <rect class="new" x="330" y="324" width="14" height="18" rx="2"/><text class="n" x="350" y="338">not yet processed</text>
+  <rect class="flw dash" x="490" y="324" width="18" height="18" rx="3"/><text class="n" x="514" y="338">added in step J2</text>
+  <text class="n" x="24" y="372">Step J: flow_a finds nothing new, flow_b reads one file (50 rows). Step J2: flow_c joins bronze_events with its own</text>
+  <text class="n" x="24" y="390">checkpoint; flow_a and flow_b keep theirs, so no file is read twice.</text>
+</svg>

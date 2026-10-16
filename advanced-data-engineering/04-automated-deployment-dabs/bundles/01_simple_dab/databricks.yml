@@ -1,0 +1,18 @@
+# A minimal bundle: one job that runs one notebook on serverless compute.
+# Deploy:  databricks bundle validate && databricks bundle deploy && databricks bundle run hello_job
+bundle:
+  name: simple_dab
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    # Development mode: resources are prefixed "[dev <you>]", schedules are paused,
+    # pipelines run in development mode, and jobs may run concurrently.
+    mode: development
+    default: true
+    # The workspace host comes from your CLI profile (`databricks auth login`).
+    # Pin it here if you work with several workspaces:
+    # workspace:
+    #   host: https://<your-workspace>.cloud.databricks.com

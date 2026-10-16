@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="100%" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Flow lifecycle during a pipeline update: QUEUED, PLANNING, STARTING, RUNNING, then COMPLETED or FAILED">
+  <style>
+    text{fill:#0b0b0b}
+    .t{font-size:18px;font-weight:600}
+    .b{font-size:14px;font-weight:600}
+    .n{font-size:12px;fill:#52514e}
+    .m{text-anchor:middle}
+    .flw{fill:#1baf7a;fill-opacity:.12;stroke:#1baf7a;stroke-width:1.5}
+    .bad{fill:#e34948;fill-opacity:.10;stroke:#e34948;stroke-width:1.5}
+    .a{fill:none;stroke:#52514e;stroke-width:1.5;marker-end:url(#ah)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="300" rx="12" fill="#fcfcfb" stroke="#e4e2dc"/>
+  <text class="t" x="24" y="36">Flow lifecycle during one pipeline update</text>
+
+  <rect class="flw" x="24" y="118" width="150" height="56" rx="8"/>
+  <text class="b m" x="99" y="151">QUEUED</text>
+  <text class="n m" x="99" y="196">waits for upstream</text>
+  <text class="n m" x="99" y="212">datasets</text>
+  <path class="a" d="M174,146 H202"/>
+
+  <rect class="flw" x="204" y="118" width="150" height="56" rx="8"/>
+  <text class="b m" x="279" y="151">PLANNING</text>
+  <text class="n m" x="279" y="196">builds the query plan</text>
+  <text class="n m" x="279" y="212">for this flow</text>
+  <path class="a" d="M354,146 H382"/>
+
+  <rect class="flw" x="384" y="118" width="150" height="56" rx="8"/>
+  <text class="b m" x="459" y="151">STARTING</text>
+  <text class="n m" x="459" y="196">starts the streaming</text>
+  <text class="n m" x="459" y="212">or batch query</text>
+  <path class="a" d="M534,146 H562"/>
+
+  <rect class="flw" x="564" y="118" width="150" height="56" rx="8"/>
+  <text class="b m" x="639" y="151">RUNNING</text>
+  <text class="n m" x="639" y="196">processes new data</text>
+  <text class="n m" x="639" y="212">since the checkpoint</text>
+  <path class="a" d="M714,146 H738 V92 H762"/>
+  <path class="a" d="M714,146 H738 V200 H762"/>
+
+  <rect class="flw" x="764" y="64" width="172" height="56" rx="8"/>
+  <text class="b m" x="850" y="88">COMPLETED</text>
+  <text class="n m" x="850" y="107">checkpoint committed</text>
+
+  <rect class="bad" x="764" y="172" width="172" height="56" rx="8"/>
+  <text class="b m" x="850" y="196">FAILED</text>
+  <text class="n m" x="850" y="215">batch not committed</text>
+  <text class="n m" x="850" y="246">downstream flows skipped</text>
+
+  <text class="n" x="24" y="276">spark-pipelines run logs these transitions for every flow; the Databricks pipeline UI shows the same states on its graph.</text>
+</svg>
