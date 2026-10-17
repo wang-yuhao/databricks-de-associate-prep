@@ -19,7 +19,7 @@ Study material and hands-on labs for Databricks data engineering, from the Assoc
 | 3 | [Databricks Performance Optimization](advanced-data-engineering/03-performance-optimization/README.md) | Spark UI · file explosion · data skipping and Liquid Clustering lab · shuffle · exploding join lab (skew and spill) · UDFs |
 | 4 | [Automated Deployment with Declarative Automation Bundles](advanced-data-engineering/04-automated-deployment-dabs/README.md) | auth · simple DAB · multi-environment DAB · templates · CI/CD with GitHub Actions · ML in workflows |
 
-**Start here:** [`advanced-data-engineering/README.md`](advanced-data-engineering/README.md) → *Setup* (about 10 minutes, one time).
+**Start here:** [`advanced-data-engineering/README.md`](advanced-data-engineering/README.md) → *Setup* (about 10 minutes, one time). On **Databricks Free Edition**: [`advanced-data-engineering/FREE_EDITION_GUIDE.md`](advanced-data-engineering/FREE_EDITION_GUIDE.md).
 
 ## Repository layout
 

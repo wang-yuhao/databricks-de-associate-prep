@@ -82,11 +82,9 @@ powershell -ExecutionPolicy Bypass -File .\setup\start_lab.ps1
 
 JupyterLab opens on this folder. Open a notebook (e.g. `01-advanced-sdp/notebooks/1.1-...ipynb`), check that the kernel (top right) is **Python (adelab)**, and run the cells top to bottom. VS Code works too: open the folder and select the `.venv` interpreter or the *Python (adelab)* kernel.
 
-### Optional: a real Databricks workspace
+### Databricks Free Edition track
 
-Sign up for **Databricks Free Edition** (free, serverless). Use it for:
-- Course 4 deploy/run steps: `databricks auth login --host <workspace-url>`, then rerun the Course 4 notebooks (cells that print `SKIPPED` now run)
-- Running the Course 1 pipeline files and Course 2 Unity Catalog SQL natively (see each course's `databricks/README.md`)
+Every course also has a workspace version for **Databricks Free Edition** (free, serverless): native notebooks in each course's `databricks/` folder, the Course 1 pipelines run as real Lakeflow pipelines, and Course 4 deploys with the CLI. Follow **[`FREE_EDITION_GUIDE.md`](FREE_EDITION_GUIDE.md)**: setup, the step-by-step task list for every lesson, what differs from the videos on Free Edition, and a coverage matrix of all official lessons.
 
 ---
 

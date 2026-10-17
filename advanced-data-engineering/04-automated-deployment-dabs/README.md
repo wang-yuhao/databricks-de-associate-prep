@@ -38,3 +38,6 @@ Notebook cells that need a workspace detect it (`bundles.workspace_status()`) an
 - **Lifecycle**: `init → validate → deploy → run → destroy`. `deploy` is idempotent: it computes and applies the difference. State lives in the workspace (`.bundle/<name>/<target>/state`).
 - **Templates**: `default-python`, `default-sql`, `default-minimal`, `pydabs` (resources in Python), `dbt-sql`, `mlops-stacks`, or your organization's own template.
 - **CI/CD**: unit tests on local Spark → `bundle validate` → deploy to stage with an **OAuth M2M service principal** → integration run → approved deploy to prod. Secrets live in the CI secret store and are referenced by name only.
+
+## Run it on Databricks Free Edition
+Step by step with every CLI command: [`../FREE_EDITION_GUIDE.md`](../FREE_EDITION_GUIDE.md) → Course 4. After each deploy, run [`databricks/4.x-inspect-deployments`](databricks/4.x-inspect-deployments.py) in the workspace to see the deployed jobs, pipelines, bundle folders, tables per environment, runs and models.

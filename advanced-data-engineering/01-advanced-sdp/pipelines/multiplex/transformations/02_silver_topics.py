@@ -1,5 +1,5 @@
 # Fan-out: one Silver streaming table per topic, generated in a loop (metaprogramming).
-# Each table publishes Iceberg metadata (UniForm) so other engines can read it as Iceberg.
+# Locally each table publishes Iceberg metadata (UniForm) so other engines can read it as Iceberg.
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
@@ -16,6 +16,10 @@ UNIFORM_PROPERTIES = {
     "delta.universalFormat.enabledFormats": "iceberg",
     "delta.enableDeletionVectors": "false",   # Iceberg compatibility requires deletion vectors off
 }
+# Databricks does not allow Iceberg reads on pipeline-managed tables: set enable_uniform=false there
+# and publish an Iceberg-readable copy outside the pipeline (see databricks/1.2-multiplex-companion).
+if spark.conf.get("enable_uniform", "true") != "true":
+    UNIFORM_PROPERTIES = {}
 
 
 def define_topic_table(topic: str, schema: str, key: str):

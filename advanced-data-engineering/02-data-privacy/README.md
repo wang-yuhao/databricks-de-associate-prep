@@ -50,3 +50,15 @@ Catalog per environment, region, or business unit, each with its own **managed s
 - `DELETE` creates a new table version. Old files stay for **time travel** until `VACUUM` (default retention 7 days). **Deletion vectors** only mark rows as deleted until the files are rewritten (`REORG TABLE ... APPLY (PURGE)`, or OPTIMIZE).
 - **Change Data Feed** (`delta.enableChangeDataFeed = true`): row-level `insert / update_preimage / update_postimage / delete` with `_commit_version`. Read with `table_changes()` or `readChangeFeed`. Use it to **propagate deletes** downstream incrementally. CDF files also hold deleted data until VACUUM.
 - Streaming readers of a table that receives deletes/updates need `skipChangeCommits`, or must read the change feed.
+
+## Run it on Databricks Free Edition
+Step by step: [`../FREE_EDITION_GUIDE.md`](../FREE_EDITION_GUIDE.md) → Course 2. Native Unity Catalog notebooks in [`databricks/`](databricks):
+
+| Notebook | Lesson |
+|---|---|
+| `2.1-securing-data-in-unity-catalog` | grants, tags, personas, row filters, column masks, dynamic view, ABAC, isolation, audit, lineage |
+| `2.2-pii-data-security` | secret-salted hashing, tokenization, AES encryption, masking, anonymization, k-anonymity, l-diversity |
+| `2.3-cdf-propagating-changes` | CDF, streaming propagation with `foreachBatch`, deletion requests, REORG PURGE, VACUUM |
+| `2.4-lab-propagating-changes-with-cdf` | lab (TODOs + CHECKs); solution in `databricks/solutions/` |
+
+`databricks/sql/2.1-row-filters-column-masks.sql` is the plain-SQL version of 2.1 for the SQL editor (group-based policies).

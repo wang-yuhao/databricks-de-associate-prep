@@ -53,3 +53,16 @@ Laptop-scale data makes absolute times small and noisy. Compare **files read, sh
 - Instance families: **general purpose** for balanced ETL, **memory optimized** for large joins, aggregations, caching and spill-heavy work, **compute optimized** for CPU-bound transformations and UDFs, **storage optimized** (local NVMe) for the Delta cache and shuffle-heavy work, **GPU** for deep learning.
 - Few large workers vs many small: fewer, larger workers reduce shuffle across the network. Many small workers give more fault isolation. Autoscaling suits variable loads. Use job clusters, not all-purpose clusters, for production jobs.
 - Size the cluster from the Spark UI: CPU-bound (task time ≈ executor run time) needs more cores; GC- or spill-bound needs more memory per core; I/O-bound needs better layout first.
+
+## Run it on Databricks Free Edition
+Step by step: [`../FREE_EDITION_GUIDE.md`](../FREE_EDITION_GUIDE.md) → Course 3. Serverless has no Spark UI: the notebooks in [`databricks/`](databricks) use the **query profile** (*See performance* under a cell), `explain()`, `DESCRIBE DETAIL` and join hints instead of Spark confs that serverless doesn't allow.
+
+| Notebook | Lesson |
+|---|---|
+| `3.1-query-profile-and-spark-ui` | Spark UI introduction mapped to the query profile |
+| `3.2-file-explosion` | small files, over-partitioning, OPTIMIZE, optimized writes, auto compaction |
+| `3.3-lab-data-skipping-and-liquid-clustering` | lab; solution in `databricks/solutions/` |
+| `3.4-shuffle` | exchanges, broadcast vs sort-merge, shuffle partitions, AQE |
+| `3.5-lab-exploding-join` | lab: explosion, skew, salting, broadcast, spill; solution in `databricks/solutions/` |
+| `3.6-user-defined-functions` | Python / Arrow / pandas / SQL UDFs vs built-ins |
+| `3.7-choosing-compute` | cluster and instance-type decisions, serverless vs SQL warehouse |

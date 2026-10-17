@@ -1,5 +1,5 @@
 # Example GitHub Actions pipeline for this bundle. It is NOT active here: copy it to
-# .github/workflows/ of the repository that hosts the bundle and adjust `working-directory`.
+# .github/workflows/ at the repository root. Paths below are relative to the repository root.
 #
 # Configure in GitHub (Settings -> Secrets and variables -> Actions), names only, never commit values:
 #   DATABRICKS_HOST                              workspace URL
@@ -9,16 +9,16 @@ name: orders-bundle-ci-cd
 
 on:
   pull_request:
-    paths: ["04-automated-deployment-dabs/bundles/03_cicd_dab/**"]
+    paths: ["advanced-data-engineering/04-automated-deployment-dabs/bundles/03_cicd_dab/**"]
   push:
     branches: [main]
-    paths: ["04-automated-deployment-dabs/bundles/03_cicd_dab/**"]
+    paths: ["advanced-data-engineering/04-automated-deployment-dabs/bundles/03_cicd_dab/**"]
   release:
     types: [published]
 
 defaults:
   run:
-    working-directory: 04-automated-deployment-dabs/bundles/03_cicd_dab
+    working-directory: advanced-data-engineering/04-automated-deployment-dabs/bundles/03_cicd_dab
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}

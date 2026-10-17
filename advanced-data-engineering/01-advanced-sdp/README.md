@@ -65,5 +65,5 @@ The pipeline files import `from pyspark import pipelines as dp`, exactly as on D
 - **Schema drift**: Auto Loader `schemaHints`, `schemaEvolutionMode` (`addNewColumns` / `rescue` / `none`), and `_rescued_data`, monitored with a warn expectation.
 - **Table-level checks**: aggregate expectations on a materialized view (row-count reconciliation across layers, non-negative totals, referential integrity through joins).
 
-## Run it on Databricks
-See [`databricks/README.md`](databricks/README.md): create a pipeline from these source files in Databricks Free Edition. SQL versions of the demo pipelines are in `databricks/sql/`.
+## Run it on Databricks Free Edition
+Step by step: [`../FREE_EDITION_GUIDE.md`](../FREE_EDITION_GUIDE.md) → Course 1. You create one pipeline per lesson from these source files and inspect it with the companion notebooks in [`databricks/`](databricks/README.md). SQL versions of the demo pipelines are in `databricks/sql/`.
