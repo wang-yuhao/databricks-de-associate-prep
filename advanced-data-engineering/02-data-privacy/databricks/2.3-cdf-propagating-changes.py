@@ -23,6 +23,14 @@ from pyspark.sql import functions as F
 USERS, EVENTS, UPDATES = (f"{LANDING}/demo23/{d}" for d in ("users", "events", "updates"))
 CKPT = f"{CHECKPOINTS}/demo23_users_silver"
 
+
+# Look versions up instead of hard-coding them: an extra commit (auto compaction, predictive optimization)
+# would shift every number after it.
+def last_version(operation):
+    return (spark.sql("DESCRIBE HISTORY users_bronze").filter(F.col("operation") == operation)
+            .agg(F.max("version")).first()[0])
+
+
 # Fresh start on every run of this cell
 for d in ("users", "events", "updates"):
     datagen.clear(f"{LANDING}/demo23/{d}")
@@ -54,6 +62,7 @@ TBLPROPERTIES (delta.enableChangeDataFeed = true, delta.enableDeletionVectors = 
  .select(*spark.table("users_bronze").columns)
  .write.mode("append").saveAsTable("users_bronze"))
 spark.read.json(EVENTS).withColumn("event_ts", F.to_timestamp("event_ts")).write.saveAsTable("events_silver")
+V_INSERT = last_version("WRITE")   # normally 1 (CREATE TABLE is version 0)
 print(spark.table("users_bronze").count(), "users |", spark.table("events_silver").count(), "events")
 
 # COMMAND ----------
@@ -70,7 +79,7 @@ try:
 except Exception:
     SALT = "demo-only-salt"   # create the secret scope in lesson 2.2 to use a real secret
 
-spark.sql("""CREATE TABLE users_silver (
+spark.sql("""CREATE TABLE IF NOT EXISTS users_silver (
   user_id BIGINT, user_key STRING, age_band STRING, city STRING, region STRING, gender STRING,
   signup_ts TIMESTAMP, updated_ts TIMESTAMP)""")
 
@@ -98,7 +107,7 @@ def apply_changes(batch_df, batch_id):
 
 
 def propagate_user_changes():
-    q = (spark.readStream.option("readChangeFeed", "true").option("startingVersion", 1)
+    q = (spark.readStream.option("readChangeFeed", "true").option("startingVersion", V_INSERT)
          .table(f"{FQ}.users_bronze")
          .writeStream.foreachBatch(apply_changes)
          .option("checkpointLocation", CKPT)
@@ -129,17 +138,19 @@ display(updates.groupBy("operation").count())
  .whenMatchedUpdate(condition="s.operation = 'UPDATE'",
                     set={c: f"s.{c}" for c in spark.table("users_bronze").columns if c != "user_id"})
  .execute())
+V_MERGE = last_version("MERGE")   # normally 2
+print("MERGE committed as version", V_MERGE)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## D. Look at the change feed
-# MAGIC Version 2 is the MERGE: each update produces a pre- and a post-image, each delete a `delete` row.
+# MAGIC The MERGE (normally version 2): each update produces an `update_preimage` and an `update_postimage`, each delete a `delete` row.
 
 # COMMAND ----------
 
-display(spark.sql("""SELECT _change_type, _commit_version, user_id, email, city
-                     FROM table_changes('users_bronze', 2) ORDER BY user_id, _change_type"""))
+display(spark.sql(f"""SELECT _change_type, _commit_version, user_id, email, city
+                     FROM table_changes('users_bronze', {V_MERGE}, {V_MERGE}) ORDER BY user_id, _change_type"""))
 
 # COMMAND ----------
 
@@ -158,7 +169,7 @@ print("still in events :", spark.table("events_silver").filter(F.col("user_id").
 # COMMAND ----------
 
 req_ids = [r.user_id for r in spark.table("users_bronze").orderBy("user_id").limit(2).collect()]
-spark.sql("CREATE TABLE delete_requests (user_id BIGINT, requested_at TIMESTAMP, status STRING, completed_at TIMESTAMP)")
+spark.sql("CREATE OR REPLACE TABLE delete_requests (user_id BIGINT, requested_at TIMESTAMP, status STRING, completed_at TIMESTAMP)")
 spark.sql(f"""INSERT INTO delete_requests VALUES ({req_ids[0]}, current_timestamp(), 'pending', NULL),
                                                   ({req_ids[1]}, current_timestamp(), 'pending', NULL)""")
 spark.sql("""MERGE INTO users_bronze t
@@ -178,9 +189,9 @@ display(spark.table("delete_requests"))
 
 ids = ", ".join(map(str, req_ids))
 display(spark.sql(f"""
-  SELECT 'time travel v1' AS source, user_id, email FROM users_bronze VERSION AS OF 1 WHERE user_id IN ({ids})
+  SELECT 'time travel' AS source, user_id, email FROM users_bronze VERSION AS OF {V_INSERT} WHERE user_id IN ({ids})
   UNION ALL
-  SELECT 'change feed', user_id, email FROM table_changes('users_bronze', 1)
+  SELECT 'change feed', user_id, email FROM table_changes('users_bronze', {V_INSERT})
   WHERE user_id IN ({ids}) AND _change_type = 'delete'"""))
 display(spark.sql("DESCRIBE HISTORY users_bronze").select("version", "timestamp", "operation", "operationMetrics"))
 display(spark.sql("DESCRIBE DETAIL users_bronze").select("numFiles", "properties"))
@@ -192,9 +203,12 @@ display(spark.sql("DESCRIBE DETAIL users_bronze").select("numFiles", "properties
 # MAGIC 1. `REORG TABLE ... APPLY (PURGE)` rewrites files with deletion vectors, so deleted rows leave the current files.
 # MAGIC 2. `VACUUM` removes files (incl. CDF `_change_data` files) not referenced by versions inside the retention window.
 # MAGIC
-# MAGIC Default retention is 7 days (fine for GDPR's one month, and it protects concurrent readers). Serverless doesn't let
-# MAGIC you disable `spark.databricks.delta.retentionDurationCheck.enabled`, so **for the demo only** lower the table's own
-# MAGIC retention. On UC managed tables, **predictive optimization** also runs VACUUM for you on a schedule.
+# MAGIC Default retention (`delta.deletedFileRetentionDuration`) is 7 days (fine for GDPR's one month, and it protects
+# MAGIC concurrent readers). Serverless doesn't let you disable `spark.databricks.delta.retentionDurationCheck.enabled`, so
+# MAGIC **for the demo only** lower the table's own retention: the safety check only compares an explicit `RETAIN` against
+# MAGIC that property, so a plain `VACUUM` then uses 0 hours. On current runtimes UC managed tables also **block time travel**
+# MAGIC (and CDF reads) older than `deletedFileRetentionDuration`, and `delta.logRetentionDuration` must stay >= it.
+# MAGIC On UC managed tables, **predictive optimization** also runs VACUUM for you automatically.
 
 # COMMAND ----------
 
@@ -214,7 +228,7 @@ spark.sql("ALTER TABLE users_bronze SET TBLPROPERTIES ('delta.deletedFileRetenti
 # COMMAND ----------
 
 try:
-    spark.sql(f"SELECT * FROM users_bronze VERSION AS OF 1 WHERE user_id = {req_ids[0]}").collect()
+    spark.sql(f"SELECT * FROM users_bronze VERSION AS OF {V_INSERT} WHERE user_id = {req_ids[0]}").collect()
     print("Old version still readable (VACUUM did not remove the files yet).")
 except Exception as e:
     print("Time travel to the old version now fails:", str(e).splitlines()[0][:150])
@@ -230,3 +244,21 @@ except Exception as e:
 # MAGIC - A streaming reader of a table that receives updates/deletes fails on non-append commits: use
 # MAGIC   `skipChangeCommits` (ignore them) or read the change feed (process them).
 # MAGIC - Keep evidence: the request table and `DESCRIBE HISTORY`.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - CDF only records changes made **after** `delta.enableChangeDataFeed = true`; read it with `table_changes('t', start[, end])`
+# MAGIC   (versions or timestamps, both inclusive) or `readChangeFeed` + `startingVersion` / `startingTimestamp`.
+# MAGIC - `_change_type` values: `insert`, `update_preimage`, `update_postimage`, `delete`. For upserts downstream drop the
+# MAGIC   pre-images and keep the latest change per key (`_commit_version`), or MERGE fails on multiple matching source rows.
+# MAGIC - `DELETE` / `MERGE ... DELETE` are logical: the rows stay readable through time travel, CDF and (with deletion vectors)
+# MAGIC   in the old data files until `REORG TABLE ... APPLY (PURGE)` rewrites them and `VACUUM` removes the unreferenced files.
+# MAGIC - `VACUUM` default retention is 7 days; `RETAIN` below `delta.deletedFileRetentionDuration` fails unless
+# MAGIC   `spark.databricks.delta.retentionDurationCheck.enabled = false` (newer runtimes ignore `RETAIN` on UC managed
+# MAGIC   tables and use the table property). `VACUUM ... DRY RUN` lists up to 1000 files.
+# MAGIC - After VACUUM you can no longer time travel to versions whose files were removed; `delta.logRetentionDuration`
+# MAGIC   (default 30 days) governs how long the history itself is kept.
+# MAGIC - A plain streaming read fails on a source that receives updates/deletes; use `skipChangeCommits` to ignore them or
+# MAGIC   the change feed to process them. `foreachBatch` + `MERGE` is the standard pattern to apply CDF changes downstream.

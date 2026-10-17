@@ -138,7 +138,7 @@ display(spark.sql("SELECT mask_email('ana.silva@example.com') AS email, mask_ssn
 display(spark.sql("""SELECT current_user() AS me, is_member('admins') AS workspace_admin,
                             is_account_group_member('account users') AS in_account_users"""))
 # CREATE FUNCTION region_filter_groups(row_region STRING) RETURNS BOOLEAN
-# RETURN is_account_group_member('admins')
+# RETURN is_account_group_member('pii_admins')
 #     OR (row_region = 'EU' AND is_account_group_member('eu_analysts'))
 #     OR (row_region = 'US' AND is_account_group_member('us_analysts'));
 
@@ -153,7 +153,8 @@ display(spark.sql("""SELECT current_user() AS me, is_member('admins') AS workspa
 spark.sql("ALTER TABLE customers SET ROW FILTER region_filter ON (region)")
 spark.sql("ALTER TABLE customers ALTER COLUMN email SET MASK mask_email")
 spark.sql("ALTER TABLE customers ALTER COLUMN ssn SET MASK mask_ssn")
-display(spark.sql("DESCRIBE EXTENDED customers").filter("col_name IN ('Row Filter', 'Column Masks') OR col_name ILIKE '%mask%' OR col_name ILIKE '%filter%'"))
+# Scroll to the "# Row Filter" / "# Column Masks" sections near the end of the output
+display(spark.sql("DESCRIBE TABLE EXTENDED customers"))
 
 # COMMAND ----------
 
@@ -204,11 +205,12 @@ use_persona("admin")
 
 # MAGIC %md
 # MAGIC ### Optional: attribute-based access control (ABAC)
-# MAGIC With ABAC (preview; Catalog Explorer → *Policies*), one policy on a catalog or schema masks **every column tagged**
-# MAGIC `pii = email` in every current and future table, instead of `ALTER TABLE` per column. If your workspace shows a
-# MAGIC *Policies* tab, create a column-mask policy on `workspace.privacy_course` that uses `mask_email` for columns with
-# MAGIC tag `pii` = `email`, then query `customers` as `eu_analyst`. Governed tags (*Catalog → Govern → Governed tags*)
-# MAGIC may be required first.
+# MAGIC With ABAC (Catalog Explorer → *Policies*; availability depends on your workspace), one policy on a catalog or
+# MAGIC schema masks **every column tagged** `pii = email` in every current and future table, instead of `ALTER TABLE` per
+# MAGIC column. ABAC matches **governed tags** only, so first create a governed tag `pii` with allowed value `email`
+# MAGIC (*Catalog → Govern → Governed tags*). Then, if your workspace shows a *Policies* tab, create a column-mask policy on
+# MAGIC `workspace.privacy_course` that uses `mask_email` for columns with tag `pii` = `email`, and query `customers` as
+# MAGIC `eu_analyst`. Table owners cannot bypass an ABAC policy.
 
 # COMMAND ----------
 
@@ -267,6 +269,19 @@ ORDER BY event_time DESC LIMIT 50""", "system.access.table_lineage")
 # MAGIC **UI:** Catalog Explorer → `customers` → **Lineage** tab → *See lineage graph*: `customers_secure` and
 # MAGIC `privacy_eu...customers` appear downstream, with column-level lineage for `email`. This is how you find every copy
 # MAGIC of a PII column before a deletion request (lesson 2.3).
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Reading a table needs `USE CATALOG` + `USE SCHEMA` + `SELECT`; privileges granted on a catalog/schema are inherited by all current and future child objects.
+# MAGIC - Row filters and column masks apply to **everyone**, including the table owner and admins; exemptions must be coded in the UDF (e.g. `is_account_group_member(...)`).
+# MAGIC - A table has at most **one** row filter (`SET ROW FILTER fn ON (cols)`) and one mask per column (`ALTER COLUMN c SET MASK fn`); the mask returns the column's type, the filter returns BOOLEAN.
+# MAGIC - Drop the filter/mask (`DROP ROW FILTER`, `ALTER COLUMN c DROP MASK`) before dropping the function; `CREATE OR REPLACE FUNCTION` changes the policy logic in place.
+# MAGIC - Policy UDFs run with the definer's rights, except user-context functions (`current_user()`, `is_account_group_member()`), which evaluate the invoker.
+# MAGIC - `is_member()` checks **workspace-local** groups; `is_account_group_member()` checks **account** groups (preferred in UC).
+# MAGIC - Dynamic views protect data only if readers have `SELECT` on the view but **not** on the base table; table-level filters/masks protect every access path.
+# MAGIC - Audit sources: `DESCRIBE HISTORY` (table changes), `system.access.audit` (who did what), `system.access.table_lineage` / `column_lineage` (data flow).
 
 # COMMAND ----------
 

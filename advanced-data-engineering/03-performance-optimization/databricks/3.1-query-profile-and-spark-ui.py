@@ -23,7 +23,7 @@
 
 # COMMAND ----------
 
-spark.range(0, 20_000_000).select(
+spark.range(0, 10_000_000).select(
     F.col("id").alias("order_id"),
     (F.col("id") % 100_000).alias("customer_id"),
     (F.rand(1) * 500).cast("decimal(10,2)").alias("amount"),
@@ -37,6 +37,8 @@ table_files("orders_31")
 # MAGIC ## A. A narrow-only query = 1 stage
 # MAGIC `filter`, `select`, `withColumn` work row by row inside a partition: no data moves between tasks.
 # MAGIC Run the cell, click **See performance** → the query → look at the profile: scan → filter → project, **no Exchange**.
+# MAGIC On serverless the plan runs on Photon, so operators show as `PhotonScan`, `PhotonFilter`, `PhotonProject` (inside
+# MAGIC `AdaptiveSparkPlan`); the stage/shuffle logic is identical to the classic Spark operators.
 
 # COMMAND ----------
 
@@ -50,7 +52,11 @@ timed(narrow, "narrow (no shuffle)")
 # MAGIC ## B. A wide transformation = a shuffle = a stage boundary
 # MAGIC `groupBy` needs all rows of a key in one task: an **Exchange (hashpartitioning)** appears. In the classic Spark UI
 # MAGIC that is a new stage with shuffle write on one side and shuffle read on the other. Note the **partial** and **final**
-# MAGIC `HashAggregate` around the exchange (map-side pre-aggregation reduces what is shuffled).
+# MAGIC `HashAggregate` around the exchange (map-side pre-aggregation reduces what is shuffled). On Photon they appear as
+# MAGIC `PhotonGroupingAgg` (partial / final) around `PhotonShuffleExchangeSink` / `PhotonShuffleExchangeSource`.
+# MAGIC
+# MAGIC Classic Spark UI vocabulary: an **action** (`count`, `write`, `collect`) triggers one or more **jobs**; a job is
+# MAGIC split into **stages** at shuffle boundaries (the DAG); each stage runs one **task per partition**.
 
 # COMMAND ----------
 
@@ -65,8 +71,9 @@ timed(wide, "wide (groupBy -> shuffle)")
 # MAGIC read), and the task-time distribution. These are the signals for every later lesson.
 # MAGIC
 # MAGIC ## C. The plan: logical → optimized → physical
-# MAGIC `explain("extended")` shows what Catalyst did: column pruning (only `customer_id`, `amount` are read) and
-# MAGIC predicate pushdown into the scan.
+# MAGIC `explain("extended")` shows the parsed, analyzed and optimized logical plans plus the physical plan. Look for
+# MAGIC column pruning (only `order_date`, `customer_id` are read, not `amount` / `order_id`) and predicate pushdown
+# MAGIC (`order_date = 2026-03-01` in the scan's data filters / `PushedFilters`).
 
 # COMMAND ----------
 
@@ -77,7 +84,8 @@ spark.table("orders_31").filter("order_date = DATE'2026-03-01'").groupBy("custom
 # MAGIC %md
 # MAGIC ## D. Caching on serverless
 # MAGIC The Storage tab shows cached data on a classic cluster. On serverless, the DataFrame cache API isn't supported;
-# MAGIC Databricks caches remote files on local SSD automatically (disk cache). To reuse an expensive result, write a table.
+# MAGIC Databricks caches remote files on local SSD automatically (disk cache; see `read_io_cache_percent` in section F).
+# MAGIC To reuse an expensive result, write a table.
 
 # COMMAND ----------
 
@@ -117,13 +125,14 @@ except Exception as e:
 # MAGIC %md
 # MAGIC ## F. Optional: query history as data
 # MAGIC `system.query.history` (if enabled in your workspace) stores the same metrics for every SQL warehouse and
-# MAGIC serverless query: `read_files`, `pruned_files`, `read_bytes`, `shuffle_read_bytes`, `spilled_local_bytes`.
+# MAGIC serverless notebook/job query: `read_files`, `pruned_files`, `read_bytes`, `read_io_cache_percent`,
+# MAGIC `shuffle_read_bytes`, `spilled_local_bytes`. Rows can appear with a few minutes of delay.
 
 # COMMAND ----------
 
 try:
     display(spark.sql("""SELECT start_time, statement_type, total_duration_ms, read_files, pruned_files,
-                                read_bytes, shuffle_read_bytes, spilled_local_bytes, left(statement_text, 80) AS stmt
+                                read_bytes, read_io_cache_percent, shuffle_read_bytes, spilled_local_bytes, left(statement_text, 80) AS stmt
                          FROM system.query.history WHERE executed_by = current_user()
                          ORDER BY start_time DESC LIMIT 20"""))
 except Exception as e:
@@ -141,3 +150,21 @@ except Exception as e:
 # MAGIC | join output rows ≫ input rows | exploding join | 3.5 |
 # MAGIC | spill (memory / disk) > 0 | spill | 3.5 |
 # MAGIC | `BatchEvalPython` / `ArrowEvalPython` operators | serialization (UDFs) | 3.6 |
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Transformations are lazy; an **action** triggers a **job**. Jobs split into **stages** at **shuffle** boundaries
+# MAGIC   (wide transformations: `groupBy`, `join` without broadcast, `distinct`, `repartition`); a stage runs **one task per partition**.
+# MAGIC - Narrow transformations (`filter`, `select`, `withColumn`) are pipelined inside one stage; `Exchange` in the plan = shuffle.
+# MAGIC - **Skew**: in a stage's *Summary Metrics* (min / 25th / median / 75th / max task duration), max ≫ median, plus one
+# MAGIC   task with far more shuffle-read bytes or records.
+# MAGIC - **Spill** (memory / disk) in stage and task metrics means partitions did not fit in execution memory: fix with more /
+# MAGIC   smaller partitions (`spark.sql.shuffle.partitions`, AQE) or by removing skew.
+# MAGIC - Spark UI tabs: **Jobs**, **Stages** (DAG, task metrics), **Storage** (cached/persisted data), **Environment**
+# MAGIC   (Spark confs, versions), **Executors** (cores, memory, GC time, shuffle), **SQL / DataFrame** (plan with per-operator metrics).
+# MAGIC - Serverless / SQL warehouses have no Spark UI: use the **query profile** and `system.query.history`;
+# MAGIC   `cache()` / `persist()` / `CACHE TABLE` are not supported there and most Spark confs cannot be set.
+# MAGIC - `explain()` modes: `simple` (physical only), `extended` (logical + physical), `formatted` (operator list + details),
+# MAGIC   `cost`, `codegen`.

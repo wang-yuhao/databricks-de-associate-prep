@@ -28,7 +28,9 @@ def timed(df, label=""):
     try:
         df.write.format("noop").mode("overwrite").save()
     except Exception:
-        df.count()
+        # count() alone would let the optimizer prune unused columns (and the UDFs that compute them).
+        t0 = time.time()
+        df.select(F.max(F.length(F.to_json(F.struct("*"))))).collect()
     secs = round(time.time() - t0, 2)
     print(f"{label:40s} {secs:7.2f} s")
     return secs
@@ -36,11 +38,12 @@ def timed(df, label=""):
 
 def table_files(table):
     """numFiles, size and average file size from DESCRIBE DETAIL (the 'small files' signal)."""
-    d = spark.sql(f"DESCRIBE DETAIL {table}").first()
-    avg_mb = round(d.sizeInBytes / max(d.numFiles, 1) / 1024 / 1024, 2)
-    out = {"table": table, "numFiles": d.numFiles, "sizeMB": round(d.sizeInBytes / 1024 / 1024, 1),
-           "avgFileMB": avg_mb, "partitionColumns": list(d.partitionColumns),
-           "clusteringColumns": list(d.clusteringColumns or [])}
+    d = spark.sql(f"DESCRIBE DETAIL {table}").first().asDict()
+    num_files, size = d.get("numFiles") or 0, d.get("sizeInBytes") or 0
+    avg_mb = round(size / max(num_files, 1) / 1024 / 1024, 2)
+    out = {"table": table, "numFiles": num_files, "sizeMB": round(size / 1024 / 1024, 1),
+           "avgFileMB": avg_mb, "partitionColumns": list(d.get("partitionColumns") or []),
+           "clusteringColumns": list(d.get("clusteringColumns") or [])}
     print(out)
     return out
 

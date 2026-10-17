@@ -34,6 +34,9 @@ table_files("orders_34"); table_files("products_34")
 # MAGIC ## A. Reading a plan: where are the shuffles?
 # MAGIC Look for `Exchange hashpartitioning(...)` (shuffle), `Exchange SinglePartition`, `BroadcastExchange` (the small side
 # MAGIC is sent to every executor, no shuffle of the big side), and `AQEShuffleRead` (AQE re-planned after the shuffle).
+# MAGIC Serverless runs **Photon**, so operators carry a `Photon` prefix (e.g. `PhotonShuffleExchangeSink/Source`,
+# MAGIC `PhotonBroadcastHashJoin`, `PhotonShuffledHashJoin`); `explain()` shows the plan *before* AQE runs
+# MAGIC (`isFinalPlan=false`), the query profile shows the final one.
 
 # COMMAND ----------
 
@@ -46,9 +49,15 @@ joined.explain("formatted")
 # MAGIC %md
 # MAGIC ## B. Broadcast hash join vs. sort-merge join
 # MAGIC - **Sort-merge join**: both sides are shuffled by the key and sorted. Scales to any size; two exchanges.
-# MAGIC - **Broadcast hash join**: the small side (default ≤ ~10 MB, more with AQE / Photon) is copied to every executor.
-# MAGIC   The big side is **not shuffled**.
-# MAGIC Force each with a hint and compare the query profiles (number of exchanges, shuffle bytes).
+# MAGIC - **Broadcast hash join**: the small side is copied to every executor; the big side is **not shuffled**.
+# MAGIC   Static planning broadcasts below `spark.sql.autoBroadcastJoinThreshold` (default 10 MB, based on estimated
+# MAGIC   size); on Databricks, AQE can also switch to broadcast at runtime below
+# MAGIC   `spark.databricks.adaptive.autoBroadcastJoinThreshold` (default 30 MB, based on actual shuffle size).
+# MAGIC   Neither is settable on serverless - hints are.
+# MAGIC
+# MAGIC Force each with a hint and compare the query profiles (number of exchanges, shuffle bytes). Photon replaces
+# MAGIC sort-merge joins with hash joins, so the `merge` hint may show up as `PhotonShuffledHashJoin` rather than
+# MAGIC `SortMergeJoin`: the point is the same - **both** sides are shuffled (two exchanges) vs. one `BroadcastExchange`.
 
 # COMMAND ----------
 
@@ -83,19 +92,23 @@ display(spark.sql("""SELECT /*+ BROADCAST(p) */ p.category, round(sum(o.amount),
 agg = spark.table("orders_34").groupBy("customer_id").agg(F.sum("amount").alias("revenue"))
 original = spark.conf.get("spark.sql.shuffle.partitions")
 print("default:", original)
-for n in ["8", "200", "2000", "auto"]:
-    try:
-        spark.conf.set("spark.sql.shuffle.partitions", n)
-        timed(agg, f"groupBy customer_id, shuffle.partitions={n}")
-    except Exception as e:
-        print(n, "->", str(e).splitlines()[0][:120])
-spark.conf.set("spark.sql.shuffle.partitions", original)
+try:
+    for n in ["8", "200", "2000", "auto"]:
+        try:
+            spark.conf.set("spark.sql.shuffle.partitions", n)
+            timed(agg, f"groupBy customer_id, shuffle.partitions={n}")
+        except Exception as e:
+            print(n, "->", str(e).splitlines()[0][:120])
+finally:
+    spark.conf.set("spark.sql.shuffle.partitions", original)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC Open the query profiles: with `2000` the shuffle-read stage first plans 2000 tasks, and AQE coalesces them;
-# MAGIC with `8` each task processes far more data. `auto` (Databricks) lets AQE pick the initial number.
+# MAGIC with `8` each task processes far more data. `auto` (Databricks *auto-optimized shuffle*) picks the partition
+# MAGIC count from the query plan and input size instead of the fixed open-source default of `200`. The `default:` line
+# MAGIC above shows what your serverless session starts with.
 
 # COMMAND ----------
 
@@ -119,11 +132,28 @@ timed(lean, "filter + pre-aggregate, then join")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Compare **shuffle bytes written** in the two query profiles: the lean version shuffles 50,000 pre-aggregated rows
-# MAGIC instead of millions of wide rows. (Catalyst pushes simple filters down by itself; pre-aggregation and dropping
+# MAGIC Compare **shuffle bytes written** in the two query profiles: the lean version's join shuffles 50,000
+# MAGIC pre-aggregated, narrow rows instead of millions of rows that still carry `notes`. (Catalyst pushes simple filters down by itself; pre-aggregation and dropping
 # MAGIC columns you still reference are your job.)
 # MAGIC
 # MAGIC ## E. Key takeaways
 # MAGIC - Every `Exchange` is a shuffle; count them in the plan and look at their bytes in the profile.
 # MAGIC - Broadcast small dimensions; let AQE coalesce partitions; set `shuffle.partitions` only when the profile says so.
 # MAGIC - Shuffle less data: select, filter and aggregate before wide operations.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Wide transformations shuffle: `join` (non-broadcast), `groupBy`/aggregations, `distinct`, window `partitionBy`,
+# MAGIC   `repartition`, `orderBy`. Narrow ones (`filter`, `select`, `withColumn`, `coalesce`) do not.
+# MAGIC - Broadcast join: no shuffle of the large side; small side must fit in driver and executor memory; not possible
+# MAGIC   for the preserved side of an outer join (e.g. right side of a LEFT OUTER join can be broadcast, left cannot).
+# MAGIC - `spark.sql.autoBroadcastJoinThreshold` default 10 MB (static, `-1` disables);
+# MAGIC   `spark.databricks.adaptive.autoBroadcastJoinThreshold` default 30 MB (AQE runtime switch).
+# MAGIC - Hints: `BROADCAST`/`BROADCASTJOIN`/`MAPJOIN`, `MERGE`/`SHUFFLE_MERGE`/`MERGEJOIN`, `SHUFFLE_HASH`,
+# MAGIC   `SHUFFLE_REPLICATE_NL`; priority BROADCAST > MERGE > SHUFFLE_HASH > SHUFFLE_REPLICATE_NL.
+# MAGIC - AQE (on by default): coalesce post-shuffle partitions, convert sort-merge to broadcast join at runtime,
+# MAGIC   split skewed partitions in joins, and detect/propagate empty relations.
+# MAGIC - `spark.sql.shuffle.partitions` default `200`; on Databricks `auto` enables auto-optimized shuffle.
+# MAGIC   With AQE coalescing, a too-high value is far cheaper than a too-low one (spill, huge tasks).

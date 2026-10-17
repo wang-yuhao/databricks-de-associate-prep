@@ -2,6 +2,7 @@
 # MAGIC %md
 # MAGIC # 2.4 Lab - Propagating Changes with CDF (Databricks Free Edition)
 # MAGIC Complete every `TODO` / `<FILL_IN>`, then run the **CHECK** cell after it. Solution: `solutions/2.4-lab-...-solution`.
+# MAGIC A cell that still contains `<FILL_IN>` is a `SyntaxError`, and an unfilled `raise NotImplementedError` stops the cell - replace both with your code.
 # MAGIC Guide: `FREE_EDITION_GUIDE.md` → Course 2 → Lab 2.4.
 
 # COMMAND ----------
@@ -119,6 +120,7 @@ spark.sql("""INSERT INTO customers_silver
 
 
 def upsert_batch(batch_df, batch_id):
+    # serverless (Spark Connect) runs this function on the server: use s, not the notebook's global spark
     s = batch_df.sparkSession
     # TODO 4a: latest change per user_id (highest _commit_version), no pre-images, columns:
     #          user_id, _change_type, email_domain (substring_index(email, '@', -1)), city, region, updated_ts
@@ -181,12 +183,14 @@ print("Step 5 passed")
 # MAGIC ## Step 6 - Make the deletes physical
 # MAGIC Deleted customers are still readable with time travel (`VERSION AS OF 1`). Remove them for good from
 # MAGIC `customers_bronze`, `customers_silver` and `clicks_silver`. Serverless can't disable the retention check, so lower
-# MAGIC each table's `delta.deletedFileRetentionDuration` for the lab, VACUUM, and restore 7 days.
+# MAGIC each table's `delta.deletedFileRetentionDuration` for the lab, VACUUM, and restore 7 days. If the compute refuses the
+# MAGIC 0-hour VACUUM, the CHECK accepts a recorded VACUUM and explains that the files go once the retention window passes.
 
 # COMMAND ----------
 
 for t in ("customers_bronze", "clicks_silver", "customers_silver"):
-    # TODO 6: purge deletion vectors, lower the retention to 0 hours, VACUUM, restore 7 days
+    # TODO 6: REORG TABLE ... APPLY (PURGE) (rewrite files that carry deletion vectors), set
+    #         delta.deletedFileRetentionDuration to 'interval 0 hours', VACUUM, set it back to 'interval 7 days'
     raise NotImplementedError("TODO 6")
 
 # COMMAND ----------
@@ -194,9 +198,26 @@ for t in ("customers_bronze", "clicks_silver", "customers_silver"):
 # CHECK step 6
 # SELECT * (not count(*)): Delta can answer count(*) from log statistics without reading any data file
 for table, version in (("customers_bronze", 1), ("clicks_silver", 0)):
+    assert spark.catalog.tableExists(table), f"{table} is missing - re-run the notebook from the top"
     try:
         spark.sql(f"SELECT * FROM {table} VERSION AS OF {version}").collect()
     except Exception:
+        print(f"{table} VERSION AS OF {version}: no longer readable (files physically removed)")
         continue
-    raise AssertionError(f"{table} VERSION AS OF {version} is still readable - did you REORG ... PURGE and VACUUM it?")
-print("Step 6 passed - historical versions are physically gone")
+    vacuums = spark.sql(f"DESCRIBE HISTORY {table}").filter("operation LIKE 'VACUUM%'").count()
+    assert vacuums > 0, f"{table} VERSION AS OF {version} is still readable - did you REORG ... PURGE and VACUUM it?"
+    print(f"NOTE: {table} was vacuumed but VERSION AS OF {version} is still readable - this compute kept the old "
+          "files (0-hour retention refused). The code is correct; the files go once the retention window passes.")
+print("Step 6 done")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - CDF is off by default; enable with `delta.enableChangeDataFeed = true`. Only changes committed **after** enabling are recorded.
+# MAGIC - `_change_type` is `insert`, `update_preimage`, `update_postimage` or `delete`; every change row also has `_commit_version` and `_commit_timestamp`.
+# MAGIC - Batch read: `spark.read.option("readChangeFeed", "true").option("startingVersion", n)` (or `startingTimestamp`, optional `endingVersion` / `endingTimestamp`, bounds inclusive); SQL: `table_changes('tbl', start [, end])`.
+# MAGIC - Streaming read without a starting version first emits the current snapshot as `insert` rows, then the changes; the checkpoint makes each run process only new commits.
+# MAGIC - One micro-batch can hold several changes for the same key: keep the latest (`row_number` over `_commit_version` desc) and drop `update_preimage` before a MERGE, or the MERGE fails on multiple matching source rows.
+# MAGIC - Deletes do not propagate by themselves: each downstream table needs its own delete (here, the `delete` rows drive the Silver MERGE and the clicks delete).
+# MAGIC - `DELETE` / `MERGE` are logical: old files (and change-data files) stay readable by time travel until `VACUUM` removes files older than `delta.deletedFileRetentionDuration` (default 7 days). With deletion vectors, run `REORG TABLE t APPLY (PURGE)` first so the rows are rewritten out of the live files.

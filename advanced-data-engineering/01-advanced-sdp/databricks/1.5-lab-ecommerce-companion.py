@@ -60,7 +60,7 @@ assert dict(b.groupBy("source_region").count().collect()) == {"EU": 120, "US": 1
 types = dict(b.dtypes)
 assert types["customer_id"] == "bigint" and types["quantity"] == "int" and types["unit_price"] == "double" \
     and types["order_ts"] == "timestamp", f"cast the columns to the target schema, got {types}"
-assert list(spark.sql("DESCRIBE DETAIL orders_bronze").first()["clusteringColumns"]) == ["source_region"], \
+assert list(spark.sql("DESCRIBE DETAIL orders_bronze").first()["clusteringColumns"] or []) == ["source_region"], \
     "orders_bronze must be clustered by source_region"
 print("Step 1 passed")
 
@@ -85,6 +85,7 @@ print("Step 2 passed")
 # MAGIC %md
 # MAGIC ## Step 3 - Silver, quarantine, and Gold
 # MAGIC Complete TODO 3.1-3.5 in `03_silver_gold.py`, add the file, **Start**, then CHECK.
+# MAGIC With the default datagen seed, batch 0 gives 209 silver + 11 quarantined rows (220 bronze).
 
 # COMMAND ----------
 
@@ -96,7 +97,7 @@ bad = spark.table("orders_silver").filter(
     "NOT (quantity > 0 AND unit_price > 0 AND customer_id IS NOT NULL AND order_ts IS NOT NULL) "
     "OR quantity IS NULL OR unit_price IS NULL").count()
 assert bad == 0, f"{bad} invalid rows reached orders_silver: check the rules of TODO 3.1 (NULLs included)"
-assert list(spark.sql("DESCRIBE DETAIL orders_silver").first()["clusteringColumns"]) == ["order_date", "source_region"], \
+assert list(spark.sql("DESCRIBE DETAIL orders_silver").first()["clusteringColumns"] or []) == ["order_date", "source_region"], \
     "orders_silver must be clustered by (order_date, source_region)"
 gold = spark.table("revenue_by_category_daily")
 assert set(gold.columns) >= {"order_date", "category", "orders", "revenue"}, f"columns: {gold.columns}"
@@ -113,6 +114,11 @@ display(expectation_metrics(EVENT_LOG))
 # MAGIC %md
 # MAGIC ## Step 4 - Day 2: incremental data and history
 # MAGIC Land target `ecommerce (lab 1.5)`, batch **1**, and **Start** the same pipeline (no full refresh).
+# MAGIC Batch 1 holds 12 CDC events (updates and deletes with `sequence_num` 11-19, plus new customers 41-45) and
+# MAGIC drifted US rows: the explicit Auto Loader schema ignores the new `coupon` field (`schemaEvolutionMode` defaults to
+# MAGIC `none` when a schema is given) and `quantity = "two"` becomes NULL, so that row lands in quarantine.
+# MAGIC Expected with the default seed: 413 silver + 27 quarantined rows, 47 `customers` rows (40 open), 3 customers with
+# MAGIC history. An SCD2 delete closes the open version (sets `__END_AT`); it does not remove rows.
 
 # COMMAND ----------
 
@@ -136,8 +142,9 @@ display(expectation_metrics(EVENT_LOG, all_updates=True))
 
 # MAGIC %md
 # MAGIC ## Step 5 (stretch) - Production touches
-# MAGIC 1. Switch the pipeline from *Development* to *Production* mode in the pipeline settings (production: retries on
-# MAGIC    failure, clusters shut down right after the update). Note the difference in the update details.
+# MAGIC 1. Switch the pipeline from *Development* to *Production* mode in the pipeline settings (production: automatic
+# MAGIC    retries on recoverable failures; development: no retries, and on classic compute the cluster is kept for reuse).
+# MAGIC    Note the difference in the update details.
 # MAGIC 2. Schedule it: pipeline → *Schedule* → add a trigger (then remove it again: Free Edition quota).
 # MAGIC 3. Open the lineage: Catalog Explorer → `workspace.sdp_1_5.revenue_by_customer_tier` → *Lineage* → *See lineage graph*.
 # MAGIC
@@ -149,3 +156,22 @@ display(expectation_metrics(EVENT_LOG, all_updates=True))
 # MAGIC    `sequence_by`.)
 # MAGIC 3. The EU feed sends `unit_price = "N/A"`. Where is that row now, and how would you reprocess it after the source fixes
 # MAGIC    the data?
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Several `@dp.append_flow`s can write into one streaming table; each flow has its own checkpoint, so you can add
+# MAGIC   or remove a source without a full refresh (and backfill one channel with a one-time flow).
+# MAGIC - `expect` keeps failing rows (metrics only), `expect_or_drop` drops them, `expect_or_fail` stops the update;
+# MAGIC   `expect_all*` take a `{name: condition}` dict. A quarantine table is the same rules inverted, so write rules that
+# MAGIC   never evaluate to NULL or the two tables stop adding up to bronze.
+# MAGIC - `create_auto_cdc_flow` orders events by `sequence_by`, so late or out-of-order events are handled; SCD type 2
+# MAGIC   adds `__START_AT` / `__END_AT` from the sequence values, and `apply_as_deletes` closes the open version.
+# MAGIC - `track_history_column_list` (or `track_history_except_column_list`) limits which columns open a new SCD2 version;
+# MAGIC   changes to other columns are written in place. `except_column_list` removes columns from the target.
+# MAGIC - Auto Loader: with an explicit schema `schemaEvolutionMode` defaults to `none` (new fields ignored, no
+# MAGIC   `_rescued_data` unless `rescuedDataColumn` is set); with schema inference it defaults to `addNewColumns`.
+# MAGIC - A streaming table processes each new input file once (checkpoint); a materialized view returns the result of its
+# MAGIC   query over the current data on every update. A full refresh clears streaming tables and their checkpoints.
+# MAGIC - `cluster_by` enables Liquid Clustering; `DESCRIBE DETAIL` shows the keys in `clusteringColumns`.

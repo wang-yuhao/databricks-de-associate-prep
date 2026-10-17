@@ -61,8 +61,8 @@ print("Step 1 passed: the customer is spread over (almost) every file -> little 
 
 # MAGIC %md
 # MAGIC ## Step 2 - Z-ORDER
-# MAGIC Copy the table to `sales_zorder` and run `OPTIMIZE ... ZORDER BY (customer_id)`. Z-ORDER rewrites everything each
-# MAGIC time and can't be used together with Liquid Clustering or on partition columns.
+# MAGIC Copy the table to `sales_zorder` and run `OPTIMIZE ... ZORDER BY (customer_id)`. Z-ORDER is not incremental (after new
+# MAGIC data arrives it re-sorts whole partitions again) and can't be used together with Liquid Clustering or on partition columns.
 
 # COMMAND ----------
 
@@ -110,12 +110,14 @@ print("Step 3 passed")
 # MAGIC ## Step 4 - Partitioning is the wrong tool here
 # MAGIC 100,000 customers would mean 100,000 folders. Try it on the first 2,000 customers only (`customer_id < 2000`),
 # MAGIC partitioned by `customer_id`, and look at the file count and average file size.
+# MAGIC (`DISTRIBUTE BY customer_id` sends each customer to one task -> one file per partition; without it every
+# MAGIC writer task opens a file in every partition and the count multiplies by the number of tasks.)
 
 # COMMAND ----------
 
 # TODO 4: partition by customer_id
 spark.sql(f"""CREATE OR REPLACE TABLE sales_partitioned <FILL_IN> TBLPROPERTIES ({SMALL_FILES})
-              AS SELECT * FROM sales_source WHERE customer_id < 2000""")
+              AS SELECT * FROM sales_source WHERE customer_id < 2000 DISTRIBUTE BY customer_id""")
 table_files("sales_partitioned")
 
 # COMMAND ----------
@@ -166,7 +168,12 @@ print("Step 5 passed")
 # COMMAND ----------
 
 spark.sql("<FILL_IN>")                 # TODO 6: collect stats only for sale_date
-spark.sql("ANALYZE TABLE sales_zorder COMPUTE DELTA STATISTICS")
+try:
+    # Rewrites the per-file stats in the Delta log for the configured columns only (DBR 14.3+ / serverless).
+    spark.sql("ANALYZE TABLE sales_zorder COMPUTE DELTA STATISTICS")
+except Exception as e:
+    print("ANALYZE ... COMPUTE DELTA STATISTICS not available here; existing files keep their old customer_id stats:",
+          str(e).splitlines()[0][:150])
 timed(q("sales_zorder", CUSTOMER_FILTER), "z-ordered but no customer stats")
 
 # COMMAND ----------
@@ -190,3 +197,24 @@ print("Step 6 passed - now open the query profile: files pruned should be 0")
 # MAGIC
 # MAGIC Liquid Clustering vs. alternatives: incremental (only unclustered data is rewritten), keys changeable, good for
 # MAGIC high-cardinality keys, no small-partition problem. It replaces partitioning and Z-ORDER for new tables.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - File stats (min, max, null count, row count) are collected for the **first 32 columns** by default. Change with
+# MAGIC   `delta.dataSkippingNumIndexedCols` (`-1` = all) or `delta.dataSkippingStatsColumns` (explicit list, takes precedence).
+# MAGIC   Changing either does **not** recompute existing files: run `ANALYZE TABLE t COMPUTE DELTA STATISTICS`.
+# MAGIC - Put filter / clustering columns where stats are collected; skipping and clustering on a column without stats is useless
+# MAGIC   (Liquid Clustering keys **must** have stats).
+# MAGIC - `OPTIMIZE t [WHERE <partition predicate>] ZORDER BY (c1, ...)`: not allowed on partition columns, loses
+# MAGIC   effectiveness with every extra column, and is not incremental.
+# MAGIC - Liquid Clustering: `CLUSTER BY (c1, ...)` (max **4** keys) on `CREATE` / CTAS, or `ALTER TABLE t CLUSTER BY (...)` on an
+# MAGIC   existing **unpartitioned** table. Incompatible with `PARTITIONED BY` and `ZORDER BY`. Check with `DESCRIBE DETAIL`
+# MAGIC   (`clusteringColumns`).
+# MAGIC - Changing keys (`ALTER TABLE ... CLUSTER BY`) rewrites nothing; `OPTIMIZE t` clusters incrementally, `OPTIMIZE t FULL`
+# MAGIC   re-clusters all existing data. `ALTER TABLE t CLUSTER BY NONE` stops clustering without rewriting data.
+# MAGIC - `CLUSTER BY AUTO` lets predictive optimization pick and evolve keys (UC managed tables, PO enabled);
+# MAGIC   `CREATE OR REPLACE` without `CLUSTER BY AUTO` turns it off.
+# MAGIC - Partition only on low-cardinality columns with large partitions (~1 GB+); high-cardinality partition keys cause
+# MAGIC   the small-file explosion seen in Step 4.

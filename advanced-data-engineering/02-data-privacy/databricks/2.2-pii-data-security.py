@@ -37,6 +37,7 @@ except Exception:
     print("Secret scope not found: using random session-only salt and key. Create the scope to practice the real setup.")
 # SQL expression for the key: read inside the query, so the value never appears in query text or history
 KEY_SQL = f"secret('{SCOPE}', 'aes_key')" if USE_SQL_SECRET else f"'{AES_KEY}'"
+SALT_COL = F.expr(f"secret('{SCOPE}', 'hash_salt')") if USE_SQL_SECRET else F.lit(SALT)
 
 users = (spark.createDataFrame(datagen.make_users())
          .withColumn("dob", F.to_date("dob")).withColumn("signup_ts", F.to_timestamp("signup_ts")))
@@ -53,7 +54,7 @@ display(spark.table("users_raw").limit(5))
 
 leaked_list = spark.table("users_raw").select("email").limit(50)   # e.g. a marketing list an attacker has
 plain = spark.table("users_raw").select("user_id", F.sha2("email", 256).alias("email_hash"))
-salted = spark.table("users_raw").select("user_id", F.sha2(F.concat(F.lit(SALT), "email"), 256).alias("email_hash"))
+salted = spark.table("users_raw").select("user_id", F.sha2(F.concat(SALT_COL, "email"), 256).alias("email_hash"))
 attack = leaked_list.select(F.sha2("email", 256).alias("email_hash"))
 print("re-identified with a plain hash :", plain.join(attack, "email_hash").count())
 print("re-identified with a secret salt:", salted.join(attack, "email_hash").count())
@@ -178,8 +179,10 @@ print("l-diversity of salary_band (age_band, region, gender):",
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC **Task:** find a generalization with **k ≥ 5** (try coarser age bands like 20-year bands, or drop `gender`). Then
-# MAGIC **suppress** the rows that are still in small groups and publish an aggregate:
+# MAGIC **Task:** find a generalization with **k ≥ 5**. With these 200 users, `gender` is the blocker: even 20-year bands
+# MAGIC (`floor(months_between(current_date(), dob) / 240) * 20`) with `region, gender` only reach k = 2, while dropping
+# MAGIC `gender` gives k ≈ 6 for `(age_band, region)` and k ≈ 13 with 20-year bands (exact values drift as ages change).
+# MAGIC Then **suppress** the rows that are still in small groups and publish an aggregate:
 
 # COMMAND ----------
 
@@ -199,3 +202,14 @@ ORDER BY age_band, region"""))
 # MAGIC - Use column masks / row filters for who-sees-what; use anonymized aggregates for broad sharing.
 # MAGIC - Pseudonymized data is still personal data: it is still subject to deletion requests (lesson 2.3).
 # MAGIC - Verify anonymization (k-anonymity, l-diversity) before publishing; re-check when columns are added.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - `dbutils.secrets.get(scope, key)` (Python) and `secret(scope, key)` (SQL) read secrets; values are redacted as `[REDACTED]` in notebook output (best effort). `secret()` raises `INVALID_SECRET_LOOKUP` if missing; `try_secret()` returns NULL instead.
+# MAGIC - Secret scopes are managed with the CLI/API (`databricks secrets create-scope`, `put-secret`, `put-acl`); scope ACLs are `READ`, `WRITE`, `MANAGE`.
+# MAGIC - `aes_encrypt(expr, key [, mode [, padding]])`: key is 16, 24 or 32 bytes (AES-128/192/256), default mode `GCM` (random IV, so the same input encrypts differently each time); returns `BINARY`, so wrap with `base64()` to store as text and `CAST(aes_decrypt(unbase64(x), key) AS STRING)` to read.
+# MAGIC - `mask(str [, upperChar [, lowerChar [, digitChar [, otherChar]]]])`: defaults `'X'`, `'x'`, `'n'`, and other characters unchanged (`NULL`).
+# MAGIC - Hashing/tokenization/encryption = **pseudonymization** (reversible or linkable, still personal data under GDPR); generalization/suppression/perturbation/aggregation = **anonymization**. An unsalted hash of a known-domain value (email, SSN) is reversible by a dictionary join.
+# MAGIC - k-anonymity protects against identity disclosure only; l-diversity is needed so a group does not reveal its sensitive value.

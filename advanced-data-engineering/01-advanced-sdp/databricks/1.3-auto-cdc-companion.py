@@ -70,9 +70,15 @@ show_state(expected_scd1=4, expected_scd2=7)
 # MAGIC ## Step 3 - Batch 2: late, out-of-order events
 # MAGIC - customer 2, seq **3** (Incheon) arrives after seq 4 (Busan): SCD1 keeps Busan; SCD2 **inserts** Incheon between
 # MAGIC   Seoul and Busan in sequence order.
-# MAGIC - customer 3, seq 2 arrives after its delete at seq 3: **ignored** (the delete is remembered as a tombstone).
-# MAGIC - customer 4: email-only change → updated in place in SCD2 (no new version).
-# MAGIC - customer 1, seq 3: same tracked values → no new SCD2 version.
+# MAGIC - customer 3, seq 2 (Kyoto) arrives after its delete at seq 3. SCD1: **ignored** - the delete is remembered as a
+# MAGIC   tombstone (`pipelines.cdc.tombstoneGCThresholdInSeconds`), so the key is not resurrected. SCD2: the key is never
+# MAGIC   reopened (no open version), but because seq 2 precedes the delete, AUTO CDC may slot Kyoto into the closed
+# MAGIC   history as `[2, 3)` and shorten Osaka to `[1, 2)`. The docs do not spell out this case - inspect customer 3 below.
+# MAGIC - customer 4, seq 2: city Prague → Brno (and a new email) → a tracked change, so SCD2 closes Prague and opens Brno.
+# MAGIC - customer 1, seq 3: identical values → no new SCD2 version.
+# MAGIC
+# MAGIC Expected SCD2 after batch 2: c1 Lisbon/Porto, c2 Seoul/Incheon/Busan, c3 Osaka (+ Kyoto?), c4 Prague/Brno, c5 Zurich
+# MAGIC = **9 or 10** rows, 4 open versions.
 
 # COMMAND ----------
 
@@ -80,21 +86,27 @@ display(spark.read.json(f"{CDC_PATH}/cdc-002.json"))
 
 # COMMAND ----------
 
-show_state(expected_scd1=4, expected_scd2=8)
-display(spark.sql("SELECT * FROM customers_scd2 WHERE customer_id = 2 ORDER BY __START_AT"))
+show_state(expected_scd1=4, expected_scd2="9 or 10")
+display(spark.sql("SELECT * FROM customers_scd2 WHERE customer_id IN (2, 3) ORDER BY customer_id, __START_AT"))
 
 # COMMAND ----------
 
 assert spark.table("customers_scd1").filter("customer_id = 3").count() == 0, "customer 3 must stay deleted"
 assert spark.table("customers_scd1").filter("customer_id = 2").first()["city"] == "Busan", \
     "SCD1 keeps the value with the highest sequence_num"
+s2 = spark.table("customers_scd2")
+assert s2.filter("customer_id = 3 AND __END_AT IS NULL").count() == 0, "customer 3 must have no open SCD2 version"
+assert [r["city"] for r in s2.filter("customer_id = 2").orderBy("__START_AT").collect()] == ["Seoul", "Incheon", "Busan"],     "late seq 3 must be inserted between Seoul and Busan"
+assert s2.filter("__END_AT IS NULL").count() == 4, "one open version per live customer (1, 2, 4, 5)"
 print("OK - late events were handled in sequence order")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Step 4 - Point-in-time queries on SCD2
-# MAGIC `__START_AT` / `__END_AT` hold `sequence_num` values (the `sequence_by` column). "What did we know at sequence 3?"
+# MAGIC `__START_AT` / `__END_AT` hold `sequence_num` values and have the same type as the `sequence_by` column (here BIGINT).
+# MAGIC "Which version was valid at sequence 3?" Comparing across keys only makes sense when `sequence_by` is a global clock
+# MAGIC (e.g. a commit timestamp); in this toy feed it is a per-key counter.
 
 # COMMAND ----------
 
@@ -140,3 +152,22 @@ display(spark.table("customers_merge").orderBy("customer_id"))
 # MAGIC **Try:** create a second pipeline (schema `sdp_1_3_sql`) from `databricks/sql/auto_cdc.sql` and compare the syntax:
 # MAGIC `CREATE FLOW ... AS AUTO CDC INTO ... KEYS ... APPLY AS DELETE WHEN ... SEQUENCE BY ... STORED AS SCD TYPE 2
 # MAGIC TRACK HISTORY ON * EXCEPT (email)`.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - `AUTO CDC` (formerly `APPLY CHANGES`) needs `KEYS` and `SEQUENCE BY`; the target must be a streaming table
+# MAGIC   (`dp.create_streaming_table` / `CREATE OR REFRESH STREAMING TABLE`). Default is SCD type 1.
+# MAGIC - Ordering is by the `sequence_by` value, not arrival order; it must be sortable and not null. Multiple events per
+# MAGIC   key in one micro-batch are resolved by sequence.
+# MAGIC - SCD1: a DELETE removes the row and leaves a tombstone so later-arriving, older events cannot resurrect the key
+# MAGIC   (retention: `pipelines.cdc.tombstoneGCThresholdInSeconds`).
+# MAGIC - SCD2 adds `__START_AT` / `__END_AT` (same type as `sequence_by`); the open version has `__END_AT IS NULL`; a DELETE
+# MAGIC   closes the current version instead of removing rows.
+# MAGIC - `TRACK HISTORY ON * EXCEPT (col)` / `track_history_except_column_list`: changes only to untracked columns update the
+# MAGIC   current row in place; no new version.
+# MAGIC - `COLUMNS * EXCEPT (...)` / `except_column_list` drops metadata columns (operation, sequence) from the target;
+# MAGIC   `apply_as_truncates` is SCD1-only.
+# MAGIC - Hand-written MERGE needs per-key dedup (`QUALIFY row_number() ... = 1`), a sequence guard on updates, and extra
+# MAGIC   state for deletes - exactly what AUTO CDC manages for you.

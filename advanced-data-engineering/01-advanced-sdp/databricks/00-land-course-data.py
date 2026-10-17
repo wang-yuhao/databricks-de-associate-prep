@@ -20,7 +20,7 @@
 
 # COMMAND ----------
 
-# MAGIC %md ## 0. Setup (run once, and again after a reset)
+# MAGIC %md ## 0. Setup (run at the start of every session: the other cells need its variables and the `datagen` import)
 
 # COMMAND ----------
 
@@ -86,7 +86,8 @@ print(ls("multiplex"))
 # COMMAND ----------
 
 # MAGIC %md ## Demo 1.3 - CDC batches
-# MAGIC Land batch 0, run the pipeline, land batch 1, run, land batch 2, run. Pick the batch in the widget at the top.
+# MAGIC Land batch 0, run the pipeline, land batch 1, run, land batch 2, run. Pick the batch in the widget at the top
+# MAGIC (picking a value re-runs this cell; landing the same batch twice just overwrites the same file).
 
 # COMMAND ----------
 
@@ -144,12 +145,30 @@ for folder in ["source_flow_a", "source_flow_b", "source_flow_c", "multiplex", "
 
 # Reset one lesson's landing data. Do a FULL REFRESH of the matching pipeline afterwards,
 # otherwise its checkpoints still remember the deleted files.
+# Picking a value re-runs this cell at once (widget default "Run Accessed Commands"); set it back
+# to "-" afterwards, or the next run of this cell (or Run all) clears the folder again.
 dbutils.widgets.dropdown("reset_folder", "-", ["-", "source_flow_a", "source_flow_b", "source_flow_c", "multiplex",
                                                "customers_cdc", "ecommerce_dq", "ecommerce", "exports"])
 folder = dbutils.widgets.get("reset_folder")
 if folder != "-":
     datagen.clear(f"{LANDING}/{folder}")
     print("cleared", folder)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Volume paths are `/Volumes/<catalog>/<schema>/<volume>/...`; plain Python file APIs (`open`, `os`, `pathlib`) work on
+# MAGIC   them through FUSE, and access is governed by Unity Catalog (`READ VOLUME` / `WRITE VOLUME`).
+# MAGIC - Auto Loader ingests each file **once**: a file rewritten under the same name is not re-ingested unless
+# MAGIC   `cloudFiles.allowOverwrites = true`. New data = new file names, as this notebook does.
+# MAGIC - Deleting landed files does not reset a streaming table: its checkpoint still records them. A **full refresh**
+# MAGIC   truncates the streaming tables, clears their checkpoints and reprocesses whatever is still in the source.
+# MAGIC - Rules stored in a table are read when the pipeline update starts (the pipeline code runs `collect()` on it), so a rule
+# MAGIC   change takes effect on the next update without a code change; write rules null-safe (`col IS NOT NULL AND ...`).
+# MAGIC - `CREATE OR REPLACE TABLE` keeps the table's history (time travel) and identity, unlike `DROP` + `CREATE`.
+# MAGIC - `DROP SCHEMA ... CASCADE` also drops the schema's tables and volumes; for **managed** tables and volumes UC
+# MAGIC   also removes the underlying data; for **external** ones only the metadata goes.
 
 # COMMAND ----------
 

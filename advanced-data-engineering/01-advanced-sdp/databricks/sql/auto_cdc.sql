@@ -1,4 +1,15 @@
 -- SQL version of pipelines/auto_cdc (Databricks only). Configuration: cdc_source.
+--
+-- Exam notes (Data Engineer Professional):
+-- * AUTO CDC INTO is the new name of APPLY CHANGES INTO. The target is declared first with
+--   CREATE OR REFRESH STREAMING TABLE (no query), and the flow must read a streaming source (STREAM(...)).
+-- * KEYS and SEQUENCE BY are required; SEQUENCE BY orders late/out-of-order events per key.
+-- * Default is STORED AS SCD TYPE 1. Without APPLY AS DELETE WHEN, delete events are just upserted.
+--   APPLY AS TRUNCATE WHEN is SCD type 1 only.
+-- * SCD type 2 adds __START_AT / __END_AT (same type as the SEQUENCE BY column); the current version
+--   has __END_AT IS NULL.
+-- * TRACK HISTORY ON * EXCEPT (cols): a change only in the excluded columns updates the current
+--   version in place instead of opening a new one.
 
 CREATE OR REFRESH STREAMING TABLE customers_cdc_bronze
 COMMENT 'Raw CDC events, append-only.'

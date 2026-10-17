@@ -36,13 +36,14 @@ builtin = df.select(F.lower(F.trim("email")).alias("email"),
                     F.round(F.col("amount_cents") / 100 * 1.19, 2).alias("gross"))
 
 
-# 2. Python UDF (row at a time, pickled)
-@udf("string")
+# 2. Python UDF (row at a time, pickled). Serverless environment v5+ turns Arrow on by default for @udf,
+#    so useArrow=False forces the classic pickle path for the comparison.
+@udf("string", useArrow=False)
 def norm_email_py(e):
     return e.strip().lower() if e is not None else None
 
 
-@udf("double")
+@udf("double", useArrow=False)
 def gross_py(c):
     return round(c / 100 * 1.19, 2) if c is not None else None
 
@@ -89,13 +90,19 @@ sql_udf = spark.sql(f"SELECT {FQ}.norm_email(email) AS email, {FQ}.gross_amount(
 
 # COMMAND ----------
 
+timed(builtin, "warm-up (ignore)")  # the first query pays scan/startup costs that would skew the ranking
 results = {name: timed(d, name) for name, d in [("built-in functions", builtin), ("SQL UDF", sql_udf),
                                                  ("pandas UDF", pandas_udf_df), ("Arrow Python UDF", arrow_udf),
                                                  ("Python UDF", python_udf)]}
 
 # COMMAND ----------
 
-assert builtin.exceptAll(pandas_udf_df).limit(1).count() == 0, "same result"
+# Same logic, but not bit-identical: Spark round() is HALF_UP on the decimal value, pandas .round() / Python round()
+# are half-to-even on the binary float, so ~0.4% of rows differ by 0.01. Emails must match exactly, gross within a cent.
+check = df.select(F.lower(F.trim("email")).alias("e1"), norm_email_pd("email").alias("e2"),
+                  F.round(F.col("amount_cents") / 100 * 1.19, 2).alias("g1"), gross_pd("amount_cents").alias("g2"))
+assert check.filter((F.col("e1") != F.col("e2")) | (F.abs(F.col("g1") - F.col("g2")) > 0.0101)).limit(1).count() == 0, \
+    "same result"
 display(spark.createDataFrame(list(results.items()), "implementation STRING, seconds DOUBLE").orderBy("seconds"))
 
 # COMMAND ----------
@@ -106,6 +113,8 @@ display(spark.createDataFrame(list(results.items()), "implementation STRING, sec
 # MAGIC - Arrow / pandas UDF → `ArrowEvalPython` (columnar batches)
 # MAGIC - Built-ins and SQL UDFs → just `Project` with expressions (the SQL UDF body is inlined)
 # MAGIC
+# MAGIC Exact operator names can differ on serverless / Photon (e.g. Photon-prefixed nodes for the built-in part), but the
+# MAGIC Python UDFs always appear as a separate Python-evaluation node that Photon does not run.
 # MAGIC In the query profile, the Python operators show up as separate nodes with their own time.
 
 # COMMAND ----------
@@ -125,7 +134,7 @@ for name, d in [("python", python_udf), ("pandas", pandas_udf_df), ("sql udf", s
 
 spark.table("payments_36").filter(F.col("customer_id") == 42).explain()                 # pushed down
 
-@udf("bigint")
+@udf("bigint", useArrow=False)
 def same_id(x):
     return x
 
@@ -144,3 +153,14 @@ timed(spark.table("payments_36").filter(same_id("customer_id") == 42), "UDF filt
 # MAGIC 2. Need reuse / governance? **SQL UDF** in Unity Catalog.
 # MAGIC 3. Need Python libraries? **pandas UDF** (or `useArrow=True`), never a plain row-at-a-time UDF on big data.
 # MAGIC 4. Keep filters and join keys out of UDFs so pushdown and data skipping still work.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Performance ranking: built-in ≈ SQL UDF (inlined, Photon-eligible) > pandas UDF ≈ Arrow Python UDF > row-at-a-time Python UDF.
+# MAGIC - Python UDFs cost serialization between the JVM/Photon and a Python worker; Arrow moves columnar batches instead of pickled rows (`useArrow=True` or `@pandas_udf`).
+# MAGIC - pandas UDF variants are chosen by type hints: Series→Series, Iterator[Series]→Iterator[Series] (expensive setup once per partition, e.g. load a model), Series→scalar (aggregate); grouped/map APIs are `groupBy().applyInPandas()` and `mapInPandas()`.
+# MAGIC - SQL UDFs: `CREATE FUNCTION catalog.schema.f(...) RETURNS ... RETURN <expr>` are Unity Catalog objects governed with `GRANT EXECUTE`, callable from SQL and Python.
+# MAGIC - Python UDFs are opaque to the optimizer: a filter on a UDF result is not pushed into the scan, so no file/data skipping.
+# MAGIC - Python and Spark can round differently (HALF_UP vs half-to-even) — validate UDF rewrites with tolerances, not exact equality on doubles.

@@ -62,7 +62,9 @@ display(expectation_metrics(EVENT_LOG))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC **CHECK:** bronze = orders + customers + clickstream + quarantine.
+# MAGIC **CHECK:** bronze = orders + customers + clickstream + quarantine. This holds exactly because the quarantine
+# MAGIC predicate is the complement of the silver one: a record is quarantined when its topic is not in `TOPICS` or
+# MAGIC `from_json(value)[key]` is NULL (corrupt JSON or missing key), which is precisely what `expect_or_drop` drops.
 
 # COMMAND ----------
 
@@ -86,16 +88,20 @@ print("OK - every multiplex record was routed")
 sink = spark.read.format("delta").load(SINK_PATH)
 print("rows in sink:", sink.count())
 display(sink.groupBy("page").count())
-display(spark.sql(f"DESCRIBE HISTORY delta.`{SINK_PATH}`").select("version", "operation", "operationMetrics"))
+try:
+    display(spark.sql(f"DESCRIBE HISTORY delta.`{SINK_PATH}`").select("version", "operation", "operationMetrics"))
+except Exception as e:
+    print("Path-based DESCRIBE HISTORY not allowed here:", str(e)[:300])
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Step 4 - Iceberg reads
 # MAGIC **Databricks rule:** Iceberg reads (UniForm) can't be enabled on streaming tables / materialized views that a pipeline
-# MAGIC owns, which is why the pipeline runs with `enable_uniform=false`. For pipeline tables Databricks offers
-# MAGIC *external data access* / *compatibility mode* (preview). For any other Delta table, UniForm works as shown here:
-# MAGIC publish an Iceberg-readable copy of `silver_orders`.
+# MAGIC owns with `IcebergCompatV2`, which is why the pipeline runs with `enable_uniform=false`. For pipeline tables
+# MAGIC Databricks offers `IcebergCompatV3` / *compatibility mode* (preview). For any other Delta table, UniForm works
+# MAGIC as shown here: publish an Iceberg-readable copy of `silver_orders`. Deletion vectors are disabled explicitly
+# MAGIC because they conflict with IcebergCompatV2 (and new serverless tables may enable them by default).
 
 # COMMAND ----------
 
@@ -114,10 +120,13 @@ display(spark.sql("SHOW TBLPROPERTIES orders_iceberg_readable")
 # MAGIC %md
 # MAGIC `DESCRIBE EXTENDED` shows a *Delta Uniform Iceberg* section with the Iceberg metadata location and the
 # MAGIC converted Delta version. Column mapping was switched on automatically (an IcebergCompatV2 requirement).
+# MAGIC Iceberg metadata is generated **asynchronously** after each commit: if the section is empty, rerun the cell.
 
 # COMMAND ----------
 
-display(spark.sql("DESCRIBE EXTENDED orders_iceberg_readable").filter("col_name ILIKE '%iceberg%' OR col_name ILIKE '%uniform%' OR col_name ILIKE '%converted%'"))
+display(spark.sql("DESCRIBE EXTENDED orders_iceberg_readable")
+        .filter("col_name ILIKE '%iceberg%' OR col_name ILIKE '%uniform%' OR col_name ILIKE '%converted%' "
+                "OR col_name ILIKE '%metadata%' OR data_type ILIKE '%.metadata.json%'"))
 
 # COMMAND ----------
 
@@ -128,7 +137,9 @@ display(spark.sql("DESCRIBE EXTENDED orders_iceberg_readable").filter("col_name 
 
 try:
     spark.sql("CREATE OR REPLACE TABLE orders_managed_iceberg USING ICEBERG AS SELECT * FROM silver_orders")
-    display(spark.sql("DESCRIBE DETAIL orders_managed_iceberg").select("format", "numFiles"))
+    # DESCRIBE DETAIL is a Delta command; DESCRIBE EXTENDED works for any table format.
+    display(spark.sql("DESCRIBE EXTENDED orders_managed_iceberg")
+            .filter("col_name IN ('Provider', 'Type', 'Location')"))
 except Exception as e:
     print("Managed Iceberg tables not available in this workspace:", str(e)[:300])
 
@@ -144,12 +155,14 @@ except Exception as e:
 # COMMAND ----------
 
 try:
+    from databricks.sdk import WorkspaceClient
     from pyiceberg.catalog.rest import RestCatalog
 
-    ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
-    host = ctx.apiUrl().get()
-    catalog = RestCatalog("uc", uri=f"{host}/api/2.1/unity-catalog/iceberg-rest",
-                          warehouse="workspace", token=ctx.apiToken().get())
+    # The SDK's notebook-native auth works on serverless, where the py4j context token getters are blocked.
+    cfg = WorkspaceClient().config
+    token = cfg.authenticate()["Authorization"].split(" ", 1)[1]
+    catalog = RestCatalog("uc", uri=f"{cfg.host.rstrip('/')}/api/2.1/unity-catalog/iceberg-rest",
+                          warehouse="workspace", token=token)
     tbl = catalog.load_table("sdp_1_2.orders_iceberg_readable")
     print("Iceberg snapshot:", tbl.current_snapshot().snapshot_id)
     print(tbl.scan(limit=5).to_pandas())
@@ -161,7 +174,7 @@ except Exception as e:
 # MAGIC %md
 # MAGIC ## Step 5 - New data arrives
 # MAGIC In `00-land-course-data`, run the **multiplex** cell again (the next 6 hours of the stream), then **Start**.
-# MAGIC Each table only processes the new records.
+# MAGIC Each streaming table (and the sink flow) only processes the new records; the materialized view is refreshed.
 
 # COMMAND ----------
 
@@ -177,8 +190,11 @@ print("rows in sink:", spark.read.format("delta").load(SINK_PATH).count())
 
 # COMMAND ----------
 
-print("rows in sink:", spark.read.format("delta").load(SINK_PATH).count())
-print("rows in silver_clickstream:", spark.table("silver_clickstream").count())
+n_sink = spark.read.format("delta").load(SINK_PATH).count()
+n_checkout = spark.table("silver_clickstream").filter("page IN ('/cart', '/checkout')").count()
+print("rows in sink:", n_sink)
+print("checkout clicks in silver_clickstream:", n_checkout)
+print(f"sink / source ratio: {n_sink / max(n_checkout, 1):.1f}  (1.0 before the full refresh, 2.0 after)")
 
 # COMMAND ----------
 
@@ -188,3 +204,22 @@ print("rows in silver_clickstream:", spark.table("silver_clickstream").count())
 # MAGIC - Unparseable payloads go to a quarantine instead of disappearing.
 # MAGIC - Sinks: append flows only, no expectations, exactly-once through the checkpoint, not cleaned by a full refresh.
 # MAGIC - Iceberg interoperability: UniForm or managed Iceberg tables, served through the UC Iceberg REST catalog.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - Multiplex = one Bronze table for many topics; fan out with `filter(topic = ...)` + `from_json(value, schema)`.
+# MAGIC   Tables created in a loop must bind the loop variable (function argument), or every table sees the last value.
+# MAGIC - `expect_or_drop` drops rows whose constraint is false **or NULL**; dropped counts appear in the event log
+# MAGIC   (`flow_progress.data_quality`), not in any table. Keep them with an inverse-predicate quarantine table.
+# MAGIC - `dp.create_sink` supports `format="delta"` (`path` or `tableName`) and `"kafka"`; only `@dp.append_flow` can write
+# MAGIC   to a sink, and expectations are not supported on sinks.
+# MAGIC - A full refresh resets streaming checkpoints and rebuilds pipeline tables, but never truncates a sink:
+# MAGIC   reprocessed data is appended again (duplicates).
+# MAGIC - UniForm: `delta.enableIcebergCompatV2 = true` + `delta.universalFormat.enabledFormats = iceberg`; needs column
+# MAGIC   mapping (auto-enabled at creation) and no deletion vectors. Iceberg metadata is generated asynchronously and
+# MAGIC   UniForm tables are read-only for Iceberg clients.
+# MAGIC - Managed Iceberg (`USING ICEBERG`) tables are read/write for external engines via the UC Iceberg REST catalog
+# MAGIC   (`/api/2.1/unity-catalog/iceberg-rest`, warehouse = catalog), which requires external data access on the
+# MAGIC   metastore and `EXTERNAL USE SCHEMA`.

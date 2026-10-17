@@ -76,8 +76,10 @@ print("OK - bronze = valid + quarantined")
 # MAGIC ## Step 4 - Schema drift arrives
 # MAGIC In `00-land-course-data`: target `ecommerce_dq`, batch **1** → land, then **Start**.
 # MAGIC Batch 1 adds an unexpected `coupon` field and a `quantity` of `"two"`. With `schemaHints` + `schemaEvolutionMode =
-# MAGIC rescue`, both land in `_rescued_data` instead of failing the stream or being lost. The **warn** expectation
-# MAGIC `no_rescued_data` makes the drift visible in the *Data quality* tab.
+# MAGIC rescue`, both land in `_rescued_data` (a JSON string, plus the source `_file_path`) instead of failing the stream
+# MAGIC or being lost: `coupon` is not in the schema, and `"two"` doesn't parse as the hinted INT, so `quantity` is NULL.
+# MAGIC The **warn** expectation `no_rescued_data` makes the drift visible in the *Data quality* tab, and the NULL
+# MAGIC quantity fails `positive_quantity`, so those rows are quarantined.
 
 # COMMAND ----------
 
@@ -87,19 +89,29 @@ display(expectation_metrics(EVENT_LOG).filter("expectation IN ('no_rescued_data'
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC **Discuss:** the other `schemaEvolutionMode` values. `addNewColumns` (default when no schema is given) fails the
-# MAGIC stream once, then restarts with the new column; `failOnNewColumns` fails until you change the schema; `none` ignores
-# MAGIC new columns and doesn't rescue them.
+# MAGIC **Discuss:** the other `schemaEvolutionMode` values. `addNewColumns` (default when no schema is given; schema
+# MAGIC hints don't count as a given schema) adds the column to the schema and fails the stream with
+# MAGIC `UnknownFieldException`; the pipeline retries and continues with the new column. `failOnNewColumns` fails and
+# MAGIC doesn't restart until you update the schema or remove the file. `none` (default when you pass a full schema) ignores
+# MAGIC new columns and doesn't rescue them unless `rescuedDataColumn` is set.
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Step 5 - Change a rule without touching code
-# MAGIC Add a rule, land batch **2** into `ecommerce_dq`, and **Start**. The new rule shows up in the metrics.
+# MAGIC Add a rule, land batch **2** into `ecommerce_dq`, and **Start**. The pipeline's Python is re-evaluated at every
+# MAGIC update, so `get_rules` picks up the new row and the rule shows up in the metrics (laptops can cost more than 2000).
+# MAGIC Without a full refresh it applies only to rows processed from now on; earlier rows keep their old flag.
 
 # COMMAND ----------
 
-spark.sql(f"INSERT INTO {RULES} VALUES ('plausible_price', 'price IS NOT NULL AND price <= 2000', 'orders')")
+# MERGE, not INSERT: re-running the cell must not add a duplicate rule row.
+spark.sql(f"""
+MERGE INTO {RULES} t
+USING (SELECT 'plausible_price' AS name, 'price IS NOT NULL AND price <= 2000' AS `constraint`, 'orders' AS tag) s
+ON t.name = s.name
+WHEN NOT MATCHED THEN INSERT *
+""")
 display(spark.table(RULES))
 
 # COMMAND ----------
@@ -128,7 +140,29 @@ display(expectation_metrics(EVENT_LOG, all_updates=True))
 # MAGIC | `expect_or_drop` | removed | continues | rows that must not reach consumers (pair with a quarantine) |
 # MAGIC | `expect_or_fail` | — | **fails**, batch not committed | invariants whose violation means a broken upstream |
 # MAGIC
-# MAGIC **Try:** in the `dq_rules` table, change a rule so it's NOT null-safe (e.g. `price > 0` without `IS NOT NULL`) and
-# MAGIC rerun with full refresh. Rows with a NULL price are then still flagged as quarantined, because the pipeline code
-# MAGIC wraps the combined rule in `coalesce(..., true)`: a fail-safe default you should copy into your own pipelines.
-# MAGIC Restore the rule afterwards.
+# MAGIC **Try:** in the `dq_rules` table, change a rule so it's NOT null-safe, e.g.
+# MAGIC ``UPDATE workspace.sdp_course.dq_rules SET `constraint` = 'quantity > 0' WHERE name = 'positive_quantity'``, and
+# MAGIC rerun with full refresh. The `"two"` rows (NULL quantity) make the combined rule NULL, but they are still
+# MAGIC quarantined, because the pipeline wraps it in `coalesce(..., true)`, and `failed_rules` still lists
+# MAGIC `positive_quantity` (each rule is wrapped in `coalesce(..., false)`): a fail-safe default worth copying.
+# MAGIC Restore the rule afterwards. Note: the full refresh re-infers the schema from all landed files, so `coupon` may now
+# MAGIC become a regular column instead of rescued data.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Exam notes (Data Engineer Professional)
+# MAGIC - `expect` keeps failing rows and only records metrics; `expect_or_drop` drops them before the write;
+# MAGIC   `expect_or_fail` stops the update and the flow's transaction is rolled back. `expect_all*` variants take a
+# MAGIC   `{name: constraint}` dict.
+# MAGIC - There is no built-in quarantine action: flag rows with the inverted, combined rule and split into valid and
+# MAGIC   quarantine datasets so no record is lost.
+# MAGIC - Expectation results live in the event log, `details:flow_progress.data_quality.expectations` (passed/failed per
+# MAGIC   rule); dropped rows are `data_quality.dropped_records`.
+# MAGIC - Rules stored in a table are read when the pipeline's source is evaluated at the start of each update; for
+# MAGIC   streaming tables a changed rule affects new data only unless you full refresh.
+# MAGIC - Auto Loader `_rescued_data` holds fields that are missing from the schema or fail to parse as the
+# MAGIC   expected type, with the source `_file_path`; the row itself is kept.
+# MAGIC - `schemaEvolutionMode` default: `addNewColumns` without a schema (hints allowed), `none` with a provided schema;
+# MAGIC   `rescue` never evolves the schema and never fails on new columns.
+# MAGIC - Row expectations can't prove completeness; use aggregate checks (row-count reconciliation MV) for that.

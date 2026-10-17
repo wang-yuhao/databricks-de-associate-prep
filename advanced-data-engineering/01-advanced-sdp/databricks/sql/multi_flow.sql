@@ -1,4 +1,13 @@
 -- SQL version of pipelines/multi_flow (Databricks only). Configuration: source_flow_a, source_flow_b.
+-- event_id_policy is not read here: valid_event_id is always FAIL UPDATE (the Python default).
+--
+-- Exam notes (Data Engineer Professional):
+-- - CREATE OR REFRESH STREAMING TABLE t; with no AS query declares a target that CREATE FLOW ... AS INSERT INTO t BY NAME fills.
+-- - Each append flow keeps its own checkpoint, so a source can be added or removed without a full refresh of the target.
+-- - CONSTRAINT name EXPECT (expr) alone = warn (row kept, metric recorded); ON VIOLATION DROP ROW = drop; ON VIOLATION FAIL UPDATE = stop the update.
+-- - Streaming reads need the STREAM keyword: FROM STREAM(t), FROM STREAM t, or FROM STREAM read_files(...); without it the query is a batch read.
+-- - ${key} is replaced with the pipeline configuration value before the SQL is parsed (spark.conf.get("key") in Python).
+-- - Expectations only drop/flag rows; keep rejected rows by writing a second table filtered on the inverse of the drop rules.
 
 -- Bronze: one streaming table, two append flows (each with its own checkpoint)
 CREATE OR REFRESH STREAMING TABLE bronze_events

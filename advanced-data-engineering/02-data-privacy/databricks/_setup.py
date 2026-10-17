@@ -8,10 +8,14 @@
 import os
 import sys
 
-_root = os.getcwd()   # the calling notebook's folder; walk up to the folder that contains adelab/
+# CWD is the notebook's folder inside the Git folder (DBR 14+/serverless); walk up to the folder that contains adelab/
+_root = os.getcwd()
 while not os.path.isdir(os.path.join(_root, "adelab")) and os.path.dirname(_root) != _root:
     _root = os.path.dirname(_root)
-sys.path.insert(0, _root)
+if not os.path.isdir(os.path.join(_root, "adelab")):
+    raise ImportError(f"adelab/ not found above {os.getcwd()}: open this notebook from the advanced-data-engineering Git folder")
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 from adelab import datagen  # noqa: E402
 
 CATALOG, SCHEMA = "workspace", "privacy_course"
