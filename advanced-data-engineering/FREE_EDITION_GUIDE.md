@@ -437,7 +437,8 @@ Every lesson of the four official outlines → the task that practices it on Fre
 |---|---|
 | `ModuleNotFoundError: adelab` | run the notebook from the Git folder (not an imported copy) |
 | Pipeline won't start: another update is running | Free Edition runs one pipeline at a time; wait or stop the other one |
-| `Table or view not found: event_log` | publish the event log (§3.0 step 5) and run one update |
+| `Table or view not found: event_log` | publish the event log (§3.0 step 5) and run one update; until then the companions fall back to `event_log(TABLE(...))` |
+| `TABLE_OR_VIEW_NOT_FOUND: bronze_events` (or another pipeline table) in a companion | the pipeline hasn't finished an update, or it publishes to another schema. The companion's first cell prints where it found the table (or that it found none); fix the pipeline's *Default schema* (e.g. `sdp_1_1`) or set the `schema` widget to the printed one |
 | Pipeline fails on `UNIFORM` / Iceberg properties | set `enable_uniform` = `false` in the multiplex configuration |
 | Lab pipeline fails with `NotImplementedError` | a file with an open TODO is in the source list; add files one step at a time |
 | Counts in a CHECK are higher than expected | data was landed twice: reset the folder in `00-land` (*reset_folder* widget) and **Full refresh** the pipeline |

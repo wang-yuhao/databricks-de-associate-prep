@@ -19,8 +19,8 @@
 
 dbutils.widgets.text("schema", "workspace.sdp_1_1")
 dbutils.widgets.text("event_log", "workspace.sdp_1_1.event_log")
-SCHEMA, EVENT_LOG = dbutils.widgets.get("schema"), dbutils.widgets.get("event_log")
-spark.sql(f"USE {SCHEMA}")
+# locate() finds the pipeline's schema if it differs from the widget, then runs USE <schema>
+SCHEMA, EVENT_LOG = locate(dbutils.widgets.get("schema"), "bronze_events", dbutils.widgets.get("event_log"))
 
 # COMMAND ----------
 

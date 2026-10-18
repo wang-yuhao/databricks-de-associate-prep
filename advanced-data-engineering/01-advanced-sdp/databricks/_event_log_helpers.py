@@ -8,6 +8,53 @@
 
 # COMMAND ----------
 
+def _table_exists(name):
+    try:
+        return spark.catalog.tableExists(name)
+    except Exception:
+        return False
+
+
+def locate(expected_schema, marker_table, event_log=None):
+    """Find the schema that really holds the pipeline's tables and a usable event log source.
+
+    The pipeline's default catalog/schema decide where its tables land. If they differ from the expected schema
+    (e.g. the pipeline was created with schema `default`), look the marker table up in information_schema.
+    Returns (schema, event_log) and runs USE <schema>. Never raises, so cells that don't need tables still run."""
+    schema = expected_schema
+    if not _table_exists(f"{expected_schema}.{marker_table}"):
+        found = []
+        for info in ("system.information_schema.tables", "workspace.information_schema.tables"):
+            try:
+                found = [f"{r.table_catalog}.{r.table_schema}" for r in spark.sql(
+                    f"SELECT table_catalog, table_schema FROM {info} WHERE table_name = '{marker_table}'").collect()]
+                break
+            except Exception:
+                continue
+        if len(found) == 1:
+            schema = found[0]
+            print(f"NOTE: `{marker_table}` is in {schema}, not {expected_schema}: using {schema}. "
+                  f"(Set the pipeline's default schema to {expected_schema.split('.')[-1]}, or the `schema` widget to {schema}.)")
+        elif len(found) > 1:
+            print(f"`{marker_table}` exists in several schemas: {found}. Set the `schema` widget to the one this pipeline "
+                  f"publishes to (pipeline Settings -> Default schema).")
+        else:
+            print(f"`{marker_table}` not found yet. Run the pipeline first. If it already ran, open its Settings and check "
+                  f"Default catalog / schema = {expected_schema.replace('.', ' / ')}.")
+    spark.sql(f"USE {schema}")
+
+    if event_log and _table_exists(event_log) and event_log.rsplit(".", 1)[0] == schema:
+        return schema, event_log
+    if _table_exists(f"{schema}.event_log"):
+        return schema, f"{schema}.event_log"
+    if _table_exists(f"{schema}.{marker_table}"):
+        # Event log not published to a table: read it through the table-valued function instead (owner only).
+        print(f"Event log table not found: using event_log(TABLE({schema}.{marker_table})). To publish it, see "
+              "pipeline Settings -> Advanced -> Event logs.")
+        return schema, f"event_log(TABLE({schema}.{marker_table}))"
+    return schema, event_log or f"{schema}.event_log"
+
+
 def latest_update_id(event_log):
     row = spark.sql(f"""SELECT origin.update_id FROM {event_log} WHERE event_type = 'create_update'
                         ORDER BY timestamp DESC LIMIT 1""").first()
@@ -59,7 +106,7 @@ def errors(event_log, limit=10):
                          WHERE level = 'ERROR' ORDER BY timestamp DESC LIMIT {limit}""")
 
 
-print("helpers: latest_update_id, updates, flow_rows, expectation_metrics, errors  (arg: event log table)")
+print("helpers: locate, latest_update_id, updates, flow_rows, expectation_metrics, errors  (arg: event log table)")
 
 # COMMAND ----------
 
