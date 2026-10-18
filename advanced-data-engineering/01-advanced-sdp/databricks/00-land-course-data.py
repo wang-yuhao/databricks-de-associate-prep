@@ -61,18 +61,28 @@ print(datagen.land_events(f"{LANDING}/source_flow_b", "b"))
 
 # COMMAND ----------
 
-# 1.1 incremental step: a new file in flow B only
-print(datagen.land_events(f"{LANDING}/source_flow_b", "b"))
+# MAGIC %md
+# MAGIC Later 1.1 steps: pick one in the **`step_1_1`** widget at the top (picking re-runs this cell and lands that file).
+# MAGIC The default `-` lands nothing, so **Run all** never lands the step 8 file, whose NULL `event_id` makes the
+# MAGIC pipeline fail on purpose. Set the widget back to `-` after each step.
 
 # COMMAND ----------
 
-# 1.1 add a third source (flow C) without a full refresh
-print(datagen.land_events(f"{LANDING}/source_flow_c", "c"))
-
-# COMMAND ----------
-
-# 1.1 expect_or_fail: a file in flow A that contains one row with event_id = NULL
-print(datagen.land_events(f"{LANDING}/source_flow_a", "a", null_event_id=True))
+STEPS_1_1 = ["-", "6: new file in flow B only", "7: third source (flow C)", "8: file with event_id = NULL (fails the update)"]
+dbutils.widgets.dropdown("step_1_1", "-", STEPS_1_1)
+step = dbutils.widgets.get("step_1_1")
+if step.startswith("6"):
+    print(datagen.land_events(f"{LANDING}/source_flow_b", "b"))
+elif step.startswith("7"):
+    print(datagen.land_events(f"{LANDING}/source_flow_c", "c"))
+elif step.startswith("8"):
+    # land_events writes 50 rows per file, plus 1 when null_event_id=True: a 51-line file is the NULL-id file
+    already = [f for f in ls("source_flow_a")
+               if sum(1 for _ in open(f"{LANDING}/source_flow_a/{f}", encoding="utf-8")) == 51]
+    print(f"NULL-id file already landed: {already}" if already
+          else datagen.land_events(f"{LANDING}/source_flow_a", "a", null_event_id=True))
+else:
+    print("step_1_1 = '-': nothing landed. Pick a step in the widget when the guide tells you to.")
 
 # COMMAND ----------
 

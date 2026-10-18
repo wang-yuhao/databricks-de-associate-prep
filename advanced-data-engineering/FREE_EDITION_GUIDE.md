@@ -108,15 +108,15 @@ Concepts first: [Course 1 README §1](01-advanced-sdp/README.md#1-multi-flows-ex
 | Configuration | `source_flow_a` = `/Volumes/workspace/sdp_course/landing/source_flow_a`, `source_flow_b` = `.../source_flow_b` |
 | Companion | `01-advanced-sdp/databricks/1.1-multi-flow-companion` |
 
-- [ ] Land: `00-land` → section 0, then cell **"1.1 step 1"**.
+- [ ] Land: `00-land` → section 0, then cell **"1.1 step 1"**. Leave the `step_1_1` widget on `-`: it lands the files of steps 6-8 only when you pick them (so **Run all** is safe).
 - [ ] Read the code: `01_bronze.py` (`dp.create_streaming_table` + two `@dp.append_flow`), `02_silver.py` (warn / drop / fail expectations, `cluster_by`, quarantine), `03_gold.py` (materialized view).
 - [ ] Create the pipeline, click **Dry run**, then **Start**.
 - [ ] ▶ In the graph: `bronze_events` has 2 incoming flows. Click `silver_events` → **Data quality** tab.
 - [ ] Companion steps 1-5: raw data, rows per flow, expectation metrics, `bronze = silver + quarantine` (CHECK), `clusteringColumns`, Gold MV.
 - [ ] Optional: change `silver_events` to `cluster_by_auto=True`, run, inspect, revert.
-- [ ] **Incremental**: `00-land` cell "new file in flow B only" → **Start** → companion step 6 (flow_a 0 rows, flow_b ~50).
-- [ ] **Add a source without full refresh**: `00-land` cell "flow C" → *Settings → Source code* add `pipelines/multi_flow_extras/flow_c.py` → add config `source_flow_c` = `.../source_flow_c` → **Start** → companion step 7.
-- [ ] **expect_or_fail**: `00-land` cell "event_id = NULL" → **Start** → update fails; read the error (companion step 8). Recover: config `event_id_policy` = `drop` → **Start**.
+- [ ] **Incremental**: `00-land` widget `step_1_1` = "6: new file in flow B only" → **Start** → companion step 6 (flow_a 0 rows, flow_b ~50).
+- [ ] **Add a source without full refresh**: `00-land` widget `step_1_1` = "7: third source (flow C)" → *Settings → Source code* add `pipelines/multi_flow_extras/flow_c.py` → add config `source_flow_c` = `.../source_flow_c` → **Start** → companion step 7.
+- [ ] **expect_or_fail**: `00-land` widget `step_1_1` = "8: file with event_id = NULL" → **Start** → update fails; read the error (companion step 8). Recover: config `event_id_policy` = `drop` → **Start**.
 - [ ] **Full refresh**: ▶ arrow next to *Start* → **Full refresh all** → companion step 9.
 - [ ] Optional SQL syntax: second pipeline `multi_flow_sql`, schema `sdp_1_1_sql`, source `01-advanced-sdp/databricks/sql/multi_flow.sql`, same configuration.
 

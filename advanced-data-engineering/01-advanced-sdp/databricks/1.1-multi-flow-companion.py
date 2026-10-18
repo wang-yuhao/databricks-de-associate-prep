@@ -122,7 +122,7 @@ display(spark.sql("SELECT * FROM gold_daily_metrics ORDER BY ingest_date, status
 
 # MAGIC %md
 # MAGIC ## Step 6 - Incremental processing
-# MAGIC In `00-land-course-data`, run the cell **"a new file in flow B only"**, then click **Start** on the pipeline.
+# MAGIC In `00-land-course-data`, set the widget **`step_1_1`** to **"6: new file in flow B only"** (then back to `-`), then click **Start** on the pipeline.
 # MAGIC Expected: `flow_a` 0 new rows (or NULL: no micro-batch had data), `flow_b` 50 new rows. Only the new file is read
 # MAGIC (Auto Loader tracks processed files in each flow's checkpoint). The MV is refreshed (incrementally if possible).
 
@@ -134,7 +134,7 @@ display(flow_rows(EVENT_LOG))
 
 # MAGIC %md
 # MAGIC ## Step 7 - Add a third source without a full refresh
-# MAGIC 1. In `00-land-course-data`, run the cell **"add a third source (flow C)"**.
+# MAGIC 1. In `00-land-course-data`, set the widget **`step_1_1`** to **"7: third source (flow C)"** (then back to `-`).
 # MAGIC 2. Pipeline → *Settings* → *Source code* → add the file `01-advanced-sdp/pipelines/multi_flow_extras/flow_c.py`.
 # MAGIC 3. *Configuration* → add `source_flow_c` = `/Volumes/workspace/sdp_course/landing/source_flow_c`.
 # MAGIC 4. **Start** (a normal update, not a full refresh). Only `flow_c` reads data; the other checkpoints are untouched.
@@ -148,7 +148,7 @@ display(flow_rows(EVENT_LOG))
 
 # MAGIC %md
 # MAGIC ## Step 8 - `expect_or_fail` stops the update
-# MAGIC 1. In `00-land-course-data`, run **"a file in flow A that contains one row with event_id = NULL"**. Start an update.
+# MAGIC 1. In `00-land-course-data`, set the widget **`step_1_1`** to **"8: file with event_id = NULL"** (then back to `-`). Start an update.
 # MAGIC 2. The update **fails** on `silver_events`. Open the error in the pipeline UI. Nothing of that micro-batch is committed to Silver
 # MAGIC    (Bronze and the quarantine are separate flows, so they may already contain the new file's rows).
 
